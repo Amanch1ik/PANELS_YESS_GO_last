@@ -13,40 +13,114 @@ const styles = `
     100% { opacity: 1; transform: translateY(0); }
   }
 
-  @keyframes welcomeFloat {
+  @keyframes welcomeEntrance {
     0% {
       opacity: 0;
-      transform: translateY(-20px) scale(0.95);
-      filter: blur(5px);
+      transform: translateY(-30px) scale(0.9) rotateX(-10deg);
+      filter: blur(8px) brightness(0.8);
     }
-    50% {
+    30% {
+      opacity: 0.7;
+      transform: translateY(-5px) scale(0.98) rotateX(-2deg);
+      filter: blur(3px) brightness(0.9);
+    }
+    70% {
       opacity: 1;
-      transform: translateY(0) scale(1);
-      filter: blur(0px);
+      transform: translateY(2px) scale(1.01) rotateX(0deg);
+      filter: blur(0px) brightness(1);
+    }
+    85% {
+      transform: translateY(-1px) scale(1.005);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotateX(0deg);
+      filter: blur(0px) brightness(1);
+    }
+  }
+
+  @keyframes welcomeExit {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1) rotateX(0deg);
+      filter: blur(0px) brightness(1);
+    }
+    30% {
+      transform: translateY(-2px) scale(1.01);
+    }
+    70% {
+      opacity: 0.8;
+      transform: translateY(-8px) scale(1.02) rotateX(2deg);
+      filter: blur(1px) brightness(1.1);
     }
     100% {
       opacity: 0;
-      transform: translateY(-10px) scale(1.02);
-      filter: blur(2px);
+      transform: translateY(-20px) scale(1.05) rotateX(5deg);
+      filter: blur(3px) brightness(1.2);
     }
   }
 
   @keyframes welcomeGlow {
     0%, 100% {
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
     }
     50% {
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 0 20px rgba(255, 255, 255, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.2);
+      box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.18),
+        0 0 32px rgba(255, 255, 255, 0.08),
+        0 0 0 1px rgba(255, 255, 255, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
   }
 
   @keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+    0% {
+      transform: translateX(-100%) skewX(-15deg);
+      opacity: 0;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(100%) skewX(-15deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes textReveal {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+      filter: blur(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0px);
+    }
   }
 
   .welcome-header {
-    animation: welcomeFloat 5s ease-in-out forwards, welcomeGlow 3s ease-in-out infinite 1s;
+    animation: welcomeEntrance 2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, welcomeGlow 4s ease-in-out infinite 1s;
+  }
+
+  .welcome-header.exiting {
+    animation: welcomeExit 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  }
+
+  .welcome-text {
+    animation: textReveal 1s ease-out 0.5s both;
+  }
+
+  .welcome-title {
+    animation: textReveal 1s ease-out 0.7s both;
+  }
+
+  .welcome-subtitle {
+    animation: textReveal 1s ease-out 0.9s both;
   }
 
   .stat-card {
@@ -80,13 +154,22 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d'>('30d')
   const [showWelcome, setShowWelcome] = useState(true)
+  const [isExiting, setIsExiting] = useState(false)
 
-  // Auto-hide welcome message after 4 seconds (with 1s fade transition)
+  // Auto-hide welcome message after 7 seconds with smooth exit animation (longer reading time)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowWelcome(false)
-    }, 4000)
-    return () => clearTimeout(timer)
+    const entranceTimer = setTimeout(() => {
+      setIsExiting(true)
+      // After exit animation completes, hide the element
+      const exitTimer = setTimeout(() => {
+        setShowWelcome(false)
+        setIsExiting(false)
+      }, 1500) // Match exit animation duration
+
+      return () => clearTimeout(exitTimer)
+    }, 7000) // Increased from 4000 to 7000ms for better reading time
+
+    return () => clearTimeout(entranceTimer)
   }, [])
 
   useEffect(() => {
@@ -321,7 +404,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
     <div className="container">
       {/* Заголовок */}
       {showWelcome && (
-        <div className="welcome-header" style={{
+        <div className={`welcome-header ${isExiting ? 'exiting' : ''}`} style={{
           background: 'var(--gradient-primary)',
           borderRadius: '16px',
           padding: '24px',
@@ -331,7 +414,9 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           border: '1px solid rgba(255, 255, 255, 0.1)',
           textAlign: 'center',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          transformStyle: 'preserve-3d',
+          backfaceVisibility: 'hidden'
         }}>
           {/* Декоративный градиентный оверлей */}
           <div style={{
@@ -340,46 +425,59 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%, rgba(255,255,255,0.1) 100%)',
-            opacity: 0.6,
+            background: 'linear-gradient(45deg, rgba(255,255,255,0.08) 0%, transparent 30%, rgba(255,255,255,0.08) 70%, transparent 100%)',
+            opacity: 0.7,
+            pointerEvents: 'none',
+            animation: 'shimmer 4s ease-in-out infinite 1.5s'
+          }}></div>
+
+          {/* Дополнительные декоративные элементы */}
+          <div style={{
+            position: 'absolute',
+            top: '-50%',
+            left: '-50%',
+            width: '200%',
+            height: '200%',
+            background: 'radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%)',
+            animation: 'welcomeGlow 6s ease-in-out infinite',
             pointerEvents: 'none'
-          }}>
-            {/* Эффект сияния */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: '-100%',
-              width: '50%',
-              height: '100%',
-              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)',
-              animation: 'shimmer 3s ease-in-out infinite',
-              pointerEvents: 'none'
-            }}></div>
-          </div>
+          }}></div>
 
           {/* Контент */}
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <div style={{
-              fontSize: '32px',
-              marginBottom: '8px',
-              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px'
+          }}>
+            <div className="welcome-text" style={{
+              fontSize: '48px',
+              filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))',
+              textShadow: '0 0 20px rgba(255,255,255,0.3)'
             }}>
               🏠
             </div>
-            <h1 style={{
-              margin: '0 0 8px 0',
-              fontSize: '28px',
-              fontWeight: '700',
+            <h1 className="welcome-title" style={{
+              margin: 0,
+              fontSize: '32px',
+              fontWeight: '800',
               color: 'var(--white)',
-              textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              textShadow: '0 3px 6px rgba(0,0,0,0.4), 0 0 30px rgba(255,255,255,0.2)',
+              letterSpacing: '1px',
+              lineHeight: '1.2'
             }}>
               🚀 Добро пожаловать в YESS!GO Admin
             </h1>
-            <p style={{
+            <p className="welcome-subtitle" style={{
               margin: 0,
-              opacity: 0.9,
-              fontSize: '16px',
-              textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+              opacity: 0.95,
+              fontSize: '18px',
+              textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              letterSpacing: '0.5px',
+              lineHeight: '1.4',
+              maxWidth: '600px'
             }}>
               Управляйте партнерами, товарами и пользователями в одном месте
             </p>
