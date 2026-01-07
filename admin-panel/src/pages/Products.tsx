@@ -33,9 +33,37 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchProducts()
-      const productsData = Array.isArray(data) ? data : data.items || data.data || []
-      setProducts(productsData)
+      // Try to fetch first page and detect pagination metadata
+      const first = await fetchProducts({ page: 1, limit: 100 })
+      // Handle array response
+      if (Array.isArray(first)) {
+        setProducts(first)
+      } else {
+        const items = first.items || first.data || []
+        const total = first.total || first.count || null
+        const perPage = first.per_page || first.pageSize || first.limit ||  (Array.isArray(items) ? items.length : 0)
+        if (total && perPage && total > items.length) {
+          // fetch remaining pages
+          const pages = Math.ceil(total / perPage)
+          const allItems = [...items]
+          for (let p = 2; p <= pages; p++) {
+            try {
+              const pageResp = await fetchProducts({ page: p, limit: perPage })
+              const pageItems = pageResp.items || pageResp.data || []
+              if (Array.isArray(pageItems) && pageItems.length > 0) {
+                allItems.push(...pageItems)
+              }
+            } catch (err) {
+              // stop fetching further pages on error
+              console.warn('Failed to fetch products page', p, err)
+              break
+            }
+          }
+          setProducts(allItems)
+        } else {
+          setProducts(items)
+        }
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err.message || 'Failed to load products'
       setError(msg)

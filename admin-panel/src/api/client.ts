@@ -175,9 +175,31 @@ export async function fetchUsers() {
   return resp.data
 }
 
-export async function fetchProducts() {
-  const resp = await api.get(API_ENDPOINTS.products.list)
+export async function fetchProducts(params?: Record<string, any>) {
+  const resp = await api.get(API_ENDPOINTS.products.list, { params })
   return resp.data
+}
+
+// Fetch recent activities/events - try common endpoints in order
+export async function fetchRecentActivities(limit: number = 10) {
+  const endpoints = ['/activities', '/events', '/admin/activities', '/admin/events']
+  for (const ep of endpoints) {
+    try {
+      const url = ep + (limit ? `?limit=${limit}` : '')
+      const resp = await api.get(url)
+      if (resp.status === 200 && resp.data) {
+        return resp.data
+      }
+    } catch (err: any) {
+      // If endpoint not found, try next one; bubble up other errors
+      if (err?.response?.status === 404) {
+        continue
+      }
+      throw err
+    }
+  }
+  // If none found, return empty array
+  return []
 }
 
 export async function createProduct(payload: Record<string, any>) {
