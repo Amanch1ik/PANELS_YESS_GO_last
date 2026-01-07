@@ -323,7 +323,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
           color: 'var(--gray-500)',
           fontSize: '12px'
         }}>
-          Административная панель YESSGO - вход для администраторов
+          Административная панель YESS!GO - вход для администраторов
         </div>
       </div>
     </div>
