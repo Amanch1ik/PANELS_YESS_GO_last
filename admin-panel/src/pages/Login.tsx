@@ -1,6 +1,163 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { login, setAuthToken } from '../api/client'
 import { useNotification } from '../contexts/NotificationContext'
+
+// CSS анимации для страницы логина
+const styles = `
+  @keyframes loginFadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes loginSlideInLeft {
+    0% {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes loginSlideInRight {
+    0% {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes loginBounceIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+    70% {
+      transform: scale(0.9);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes loginGlow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(7, 185, 129, 0.3);
+    }
+    50% {
+      box-shadow: 0 0 40px rgba(7, 185, 129, 0.6), 0 0 60px rgba(7, 185, 129, 0.3);
+    }
+  }
+
+  @keyframes loginFloat {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    33% {
+      transform: translateY(-10px) rotate(1deg);
+    }
+    66% {
+      transform: translateY(5px) rotate(-1deg);
+    }
+  }
+
+  @keyframes loginPulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+  }
+
+  .login-card {
+    animation: loginFadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .login-title {
+    animation: loginBounceIn 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.2s both;
+  }
+
+  .login-subtitle {
+    animation: loginFadeInUp 0.6s ease-out 0.4s both;
+  }
+
+  .login-form-group {
+    animation: loginSlideInLeft 0.6s ease-out 0.6s both;
+  }
+
+  .login-password-group {
+    animation: loginSlideInRight 0.6s ease-out 0.8s both;
+  }
+
+  .login-button {
+    animation: loginBounceIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) 1s both;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .login-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: loginShimmer 2s infinite;
+  }
+
+  @keyframes loginShimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  .login-footer {
+    animation: loginFadeInUp 0.6s ease-out 1.2s both;
+  }
+
+  .login-decorative-1 {
+    animation: loginFloat 6s ease-in-out infinite;
+  }
+
+  .login-decorative-2 {
+    animation: loginFloat 8s ease-in-out infinite reverse;
+  }
+
+  .login-input:focus {
+    animation: loginGlow 0.3s ease-out forwards;
+  }
+
+  .login-icon-user {
+    animation: loginPulse 2s ease-in-out infinite;
+  }
+
+  .login-icon-lock {
+    animation: loginPulse 2s ease-in-out infinite 0.5s;
+  }
+`
+
+// Создаем элемент style
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style')
+  style.textContent = styles
+  document.head.appendChild(style)
+}
 
 export default function Login({ onLogin, onError }: { onLogin: () => void, onError?: (msg: string) => void }) {
   const { pushToast } = useNotification()
@@ -65,7 +222,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
       background: 'var(--gradient-bg)',
       padding: '20px'
     }}>
-      <div style={{
+      <div className="login-card" style={{
         background: 'var(--white)',
         borderRadius: '20px',
         padding: '40px',
@@ -77,7 +234,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
         overflow: 'hidden'
       }}>
         {/* Декоративный элемент */}
-        <div style={{
+        <div className="login-decorative-1" style={{
           position: 'absolute',
           top: '-50px',
           right: '-50px',
@@ -88,7 +245,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
           opacity: 0.1
         }}></div>
 
-        <div style={{
+        <div className="login-decorative-2" style={{
           position: 'absolute',
           bottom: '-30px',
           left: '-30px',
@@ -101,7 +258,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
 
         {/* Заголовок */}
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-          <div style={{
+          <div className="login-title" style={{
             fontSize: '32px',
             fontWeight: '700',
             color: 'var(--accent)',
@@ -110,7 +267,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
           }}>
             YESS!GO
           </div>
-          <div style={{
+          <div className="login-subtitle" style={{
             fontSize: '18px',
             color: 'var(--gray-600)',
             fontWeight: '500',
@@ -122,7 +279,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
 
         {/* Форма */}
         <form onSubmit={handleSubmit} style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ marginBottom: '20px' }}>
+          <div className="login-form-group" style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
               color: 'var(--gray-700)',
@@ -136,6 +293,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
             </label>
             <div style={{ position: 'relative' }}>
               <input
+                className="login-input"
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
@@ -153,16 +311,8 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = 'var(--accent)';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(7, 185, 129, 0.2)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = 'rgba(7, 185, 129, 0.3)';
-                  e.target.style.boxShadow = 'none';
-                }}
               />
-              <div style={{
+              <div className="login-icon-user" style={{
                 position: 'absolute',
                 left: '16px',
                 top: '50%',
@@ -175,7 +325,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
             </div>
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
+          <div className="login-password-group" style={{ marginBottom: '24px' }}>
             <label style={{
               display: 'block',
               color: 'var(--gray-700)',
@@ -189,6 +339,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
             </label>
             <div style={{ position: 'relative' }}>
               <input
+                className="login-input"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -215,7 +366,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                   e.target.style.boxShadow = 'none';
                 }}
               />
-              <div style={{
+              <div className="login-icon-lock" style={{
                 position: 'absolute',
                 left: '16px',
                 top: '50%',
@@ -267,6 +418,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
           )}
 
           <button
+            className="login-button"
             type="submit"
             disabled={loading}
             style={{
@@ -315,7 +467,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
         </form>
 
         {/* Footer */}
-        <div style={{
+        <div className="login-footer" style={{
           textAlign: 'center',
           marginTop: '24px',
           paddingTop: '20px',
@@ -323,7 +475,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
           color: 'var(--gray-500)',
           fontSize: '12px'
         }}>
-          Административная панель YESS!GO - вход для администраторов
+          YESS!GO - вход для администраторов
         </div>
       </div>
     </div>
