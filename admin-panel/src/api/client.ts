@@ -160,8 +160,8 @@ export async function login(username: string, password: string) {
   }
 }
 
-export async function fetchPartners() {
-  const resp = await api.get(API_ENDPOINTS.partners.list)
+export async function fetchPartners(params?: Record<string, any>) {
+  const resp = await api.get(API_ENDPOINTS.partners.list, { params })
   return resp.data
 }
 
@@ -170,8 +170,8 @@ export async function fetchMessages() {
   return resp.data
 }
 
-export async function fetchUsers() {
-  const resp = await api.get(API_ENDPOINTS.users.list)
+export async function fetchUsers(params?: Record<string, any>) {
+  const resp = await api.get(API_ENDPOINTS.users.list, { params })
   return resp.data
 }
 
@@ -181,12 +181,12 @@ export async function fetchProducts(params?: Record<string, any>) {
 }
 
 // Fetch recent activities/events - try common endpoints in order
-export async function fetchRecentActivities(limit: number = 10) {
+export async function fetchRecentActivities(limit: number = 10, params?: Record<string, any>) {
   const endpoints = ['/activities', '/events', '/admin/activities', '/admin/events']
   for (const ep of endpoints) {
     try {
-      const url = ep + (limit ? `?limit=${limit}` : '')
-      const resp = await api.get(url)
+      const query = { limit, ...(params || {}) }
+      const resp = await api.get(ep, { params: query })
       if (resp.status === 200 && resp.data) {
         return resp.data
       }
@@ -200,6 +200,36 @@ export async function fetchRecentActivities(limit: number = 10) {
   }
   // If none found, return empty array
   return []
+}
+
+export async function fetchTransactions(params?: Record<string, any>) {
+  const endpoints = ['/transactions', '/admin/transactions', '/payments', '/admin/payments']
+  for (const ep of endpoints) {
+    try {
+      const resp = await api.get(ep, { params })
+      if (resp.status === 200 && resp.data) {
+        return resp.data
+      }
+    } catch (err: any) {
+      if (err?.response?.status === 404) continue
+      throw err
+    }
+  }
+  return { items: [], total: 0 }
+}
+
+export async function getTransaction(id: string | number) {
+  const endpoints = [`/transactions/${id}`, `/admin/transactions/${id}`, `/payments/${id}`, `/admin/payments/${id}`]
+  for (const ep of endpoints) {
+    try {
+      const resp = await api.get(ep)
+      if (resp.status === 200 && resp.data) return resp.data
+    } catch (err: any) {
+      if (err?.response?.status === 404) continue
+      throw err
+    }
+  }
+  throw new Error('Transaction not found')
 }
 
 export async function createProduct(payload: Record<string, any>) {

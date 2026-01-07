@@ -12,6 +12,7 @@ const PartnerDetail = lazy(() => import('./pages/PartnerDetail'))
 const Messages = lazy(() => import('./pages/Messages'))
 const Users = lazy(() => import('./pages/Users'))
 const Products = lazy(() => import('./pages/Products'))
+const Transactions = lazy(() => import('./pages/Transactions'))
 const RBACPage = lazy(() => import('./pages/RBAC'))
 const AuditLogs = lazy(() => import('./pages/AuditLogs'))
 
@@ -98,6 +99,13 @@ function Navigation() {
             border: isActive('/products') ? 'none' : '1px solid var(--gray-300)'
           }}>Продукты</button>
         </Link>
+        <Link to="/transactions" style={{ textDecoration: 'none' }}>
+          <button className="button" style={{
+            background: isActive('/transactions') ? 'var(--accent)' : 'var(--gray-100)',
+            color: isActive('/transactions') ? 'var(--white)' : 'var(--gray-700)',
+            border: isActive('/transactions') ? 'none' : '1px solid var(--gray-300)'
+          }}>Транзакции</button>
+        </Link>
         <Link to="/messages" style={{ textDecoration: 'none' }}>
           <button className="button" style={{
             background: isActive('/messages') ? 'var(--accent)' : 'var(--gray-100)',
@@ -176,6 +184,7 @@ function AppContent() {
           <Route path="/partners" element={<Partners onError={onError} />} />
           <Route path="/partners/:id" element={<PartnerDetail onError={onError} />} />
           <Route path="/products" element={<Products onError={onError} />} />
+          <Route path="/transactions" element={<Transactions onError={onError} />} />
           <Route path="/messages" element={<Messages onError={onError} />} />
           <Route path="/users" element={<Users onError={onError} />} />
           <Route path="/rbac" element={<RBACPage />} />
