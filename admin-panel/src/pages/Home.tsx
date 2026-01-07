@@ -250,11 +250,11 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         </div>
       </div>
 
-      {/* Основная статистика */}
+      {/* Компактные метрики */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '24px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: '20px',
         marginBottom: '32px'
       }}>
         {[
@@ -262,7 +262,8 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             title: 'Партнеры',
             value: stats.partners,
             icon: '🏪',
-            color: 'from-blue-500 to-blue-600',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            bgLight: 'rgba(102, 126, 234, 0.1)',
             trend: '+12%',
             trendUp: true
           },
@@ -270,7 +271,8 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             title: 'Пользователи',
             value: stats.users,
             icon: '👥',
-            color: 'from-green-500 to-green-600',
+            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            bgLight: 'rgba(245, 87, 108, 0.1)',
             trend: '+8%',
             trendUp: true
           },
@@ -278,88 +280,117 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             title: 'Продукты',
             value: stats.products,
             icon: '📦',
-            color: 'from-purple-500 to-purple-600',
+            gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            bgLight: 'rgba(0, 242, 254, 0.1)',
             trend: '+15%',
             trendUp: true
           },
           {
             title: 'Выручка',
-            value: '125,430 сом',
+            value: '125,430 ₽',
             icon: '💰',
-            color: 'from-yellow-500 to-orange-500',
+            gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            bgLight: 'rgba(67, 233, 123, 0.1)',
             trend: '+22%',
             trendUp: true
           }
         ].map((card, index) => (
           <div
             key={card.title}
+            className="stat-card"
             style={{
               background: 'var(--white)',
               borderRadius: '16px',
-              padding: '24px',
+              padding: '20px',
               border: '1px solid rgba(0, 0, 0, 0.05)',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer'
             }}
           >
-            {/* Фоновый градиент */}
+            {/* Фоновые декоративные элементы */}
             <div style={{
               position: 'absolute',
-              top: 0,
-              right: 0,
+              top: '-30px',
+              right: '-30px',
               width: '80px',
               height: '80px',
-              background: `linear-gradient(135deg, var(--${card.color.split('-')[1]}-500), var(--${card.color.split('-')[3]}-600))`,
-              opacity: 0.1,
-              borderRadius: '0 0 0 50px',
-              transform: 'translate(20px, -20px)'
+              background: card.bgLight,
+              borderRadius: '50%',
+              opacity: 0.6
             }}></div>
 
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '16px'
-            }}>
-              <div style={{
-                fontSize: '40px',
-                opacity: 0.8
-              }}>
-                {card.icon}
-              </div>
+              position: 'absolute',
+              bottom: '-20px',
+              left: '-20px',
+              width: '60px',
+              height: '60px',
+              background: card.gradient,
+              borderRadius: '50%',
+              opacity: 0.08,
+              transform: 'scale(1.2)'
+            }}></div>
+
+            {/* Основной контент */}
+            <div style={{ position: 'relative', zIndex: 1 }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: card.trendUp ? '#10b981' : '#ef4444',
-                background: card.trendUp ? '#dcfce7' : '#fee2e2',
-                padding: '4px 8px',
-                borderRadius: '12px'
+                justifyContent: 'space-between',
+                marginBottom: '12px'
               }}>
-                {card.trendUp ? '↗️' : '↘️'} {card.trend}
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  background: card.gradient,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '22px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+                }}>
+                  {card.icon}
+                </div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: card.trendUp ? '#10b981' : '#ef4444',
+                  background: card.trendUp ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  padding: '3px 6px',
+                  borderRadius: '8px',
+                  border: `1px solid ${card.trendUp ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
+                }}>
+                  {card.trendUp ? '↗️' : '↘️'} {card.trend}
+                </div>
               </div>
-            </div>
 
-            <div style={{ marginBottom: '8px' }}>
-              <div style={{
-                fontSize: '32px',
-                fontWeight: '700',
-                color: 'var(--gray-900)',
-                lineHeight: '1'
-              }}>
-                {card.value}
+              <div>
+                <div style={{
+                  fontSize: '28px',
+                  fontWeight: '800',
+                  color: 'var(--gray-900)',
+                  lineHeight: '1',
+                  marginBottom: '4px'
+                }}>
+                  {card.value}
+                </div>
+                <div style={{
+                  color: 'var(--gray-600)',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  {card.title}
+                </div>
               </div>
-            </div>
-
-            <div style={{
-              color: 'var(--gray-600)',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}>
-              {card.title}
             </div>
           </div>
         ))}
