@@ -68,7 +68,14 @@ function Navigation() {
 
   return (
     <header style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--white)', boxShadow: 'var(--shadow-md)', borderRadius: '16px', marginBottom: '32px', border: '1px solid var(--gray-200)' }}>
-      <div style={{ fontWeight: 700, fontSize: '24px', color: 'var(--accent)', textShadow: 'none' }}>YESS!GO Админ</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '24px', color: 'var(--accent)', textShadow: 'none' }}>
+        <img
+          src="/favicon.svg"
+          alt="YESS!GO Logo"
+          style={{ width: '32px', height: '32px' }}
+        />
+        YESS!GO Админ
+      </div>
       <nav style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         <Link to="/home" style={{ textDecoration: 'none' }}>
           <button className="button" style={{

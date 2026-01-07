@@ -3,6 +3,16 @@ import { fetchProducts, createProduct, updateProduct, deleteProduct, uploadProdu
 import ProductForm from '../components/ProductForm'
 import ConfirmDialog from '../components/ConfirmDialog'
 
+// CSS анимации
+const styles = ``
+
+// Создаем элемент style
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style')
+  style.textContent = styles
+  document.head.appendChild(style)
+}
+
 type Product = {
   id: string | number
   name: string
@@ -24,7 +34,8 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
     setError(null)
     try {
       const data = await fetchProducts()
-      setProducts(Array.isArray(data) ? data : data.items || data.data || [])
+      const productsData = Array.isArray(data) ? data : data.items || data.data || []
+      setProducts(productsData)
     } catch (err: any) {
       const msg = err?.response?.data?.message || err.message || 'Failed to load products'
       setError(msg)
@@ -82,7 +93,9 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
   return (
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{ color: 'var(--gray-900)', textShadow: 'none', marginBottom: '24px' }}>Продукты</h2>
+        <h2 style={{ color: 'var(--gray-900)', textShadow: 'none', marginBottom: '24px' }}>
+          Продукты
+        </h2>
         <button className="button" onClick={() => setCreating(true)}>Новый продукт</button>
       </div>
       <div className="card">

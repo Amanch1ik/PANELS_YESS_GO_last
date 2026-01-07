@@ -2,6 +2,8 @@
   "name": "yessgo-admin-panel",
   "version": "0.1.0",
   "private": true,
+  "description": "Administrative panel for YESS!GO application management",
+  "icon": "public/favicon.svg",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

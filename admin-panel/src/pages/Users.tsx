@@ -165,8 +165,8 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
         const msg = err?.response?.data?.message || err.message || 'Ошибка загрузки пользователей'
         console.error('❌ Ошибка загрузки пользователей:', msg)
 
-        // Если токен истек, перенаправляем на логин
         if (err?.response?.status === 401) {
+          // Только для других 401 ошибок (не API недоступен) перенаправляем на логин
           console.warn('🔐 Токен истек, перенаправление на страницу входа...')
           setTimeout(() => {
             window.location.href = '/login'
@@ -174,8 +174,8 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
           setError('Сессия истекла. Перенаправление на страницу входа...')
         } else {
           setError(msg)
+          onError?.(msg)
         }
-        onError?.(msg)
       })
       .finally(() => setLoading(false))
 

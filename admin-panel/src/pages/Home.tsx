@@ -187,7 +187,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           console.log('✅ Partners data loaded')
         } catch (error: any) {
           console.warn('⚠️ Failed to load partners:', error.message)
-          // Don't call onError for individual API failures, just log them
+          onError?.('Ошибка загрузки партнеров: ' + error.message)
         }
 
         try {
@@ -195,6 +195,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           console.log('✅ Users data loaded')
         } catch (error: any) {
           console.warn('⚠️ Failed to load users:', error.message)
+          onError?.('Ошибка загрузки пользователей: ' + error.message)
         }
 
         try {
@@ -202,21 +203,15 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           console.log('✅ Products data loaded')
         } catch (error: any) {
           console.warn('⚠️ Failed to load products:', error.message)
+          onError?.('Ошибка загрузки продуктов: ' + error.message)
         }
 
         const partners = Array.isArray(partnersData) ? partnersData : (partnersData.items || partnersData.data || [])
         const users = Array.isArray(usersData) ? usersData : (usersData.items || usersData.data || [])
         const products = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
 
-        // Если API вернул пустые массивы, используем демо данные
-        const finalPartners = partners.length > 0 ? partners : [
-          { id: 1, name: 'AIYMA Kids' }, { id: 2, name: 'SportMaster' }, { id: 3, name: 'TechStore' },
-          { id: 4, name: 'Fashion Hub' }, { id: 5, name: 'Home & Garden' }
-        ]
-        const finalUsers = users.length > 0 ? users : [
-          { id: 1, name: 'Иван' }, { id: 2, name: 'Мария' }, { id: 3, name: 'Алексей' },
-          { id: 4, name: 'Елена' }, { id: 5, name: 'Дмитрий' }, { id: 6, name: 'Ольга' }, { id: 7, name: 'Сергей' }
-        ]
+        const finalPartners = partners
+        const finalUsers = users
 
         // Получаем реальные данные о товарах и рассчитываем статистику
         let totalProductsCount = products.length

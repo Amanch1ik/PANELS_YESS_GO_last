@@ -68,74 +68,16 @@ export default function Partners() {
   const [editing, setEditing] = useState<Partner | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Partner | null>(null)
-  const [isDemoMode, setIsDemoMode] = useState(false)
   const navigate = useNavigate()
 
-  // Демо-данные для показа картинок партнеров
-  const getDemoPartners = () => [
-    {
-      id: 1,
-      name: 'AIYMA Kids',
-      description: 'Магазин детской одежды и игрушек',
-      imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop&crop=center',
-      createdAt: '2024-01-15T10:30:00Z'
-    },
-    {
-      id: 2,
-      name: 'SportMaster',
-      description: 'Спортивные товары и оборудование',
-      imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=200&h=200&fit=crop&crop=center',
-      createdAt: '2024-01-20T14:15:00Z'
-    },
-    {
-      id: 3,
-      name: 'TechStore',
-      description: 'Электроника и гаджеты',
-      imageUrl: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=200&h=200&fit=crop&crop=center',
-      createdAt: '2024-01-25T09:45:00Z'
-    },
-    {
-      id: 4,
-      name: 'BookWorld',
-      description: 'Книги и учебные материалы',
-      imageUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=200&h=200&fit=crop&crop=center',
-      createdAt: '2024-01-30T16:20:00Z'
-    },
-    {
-      id: 5,
-      name: 'HealthyLife',
-      description: 'Здоровое питание и добавки',
-      imageUrl: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=200&h=200&fit=crop&crop=center',
-      createdAt: '2024-02-05T11:10:00Z'
-    }
-  ]
 
   const load = async () => {
     try {
       setLoading(true)
       setError(null)
       const data = await fetchPartners()
-      let list = Array.isArray(data) ? data : (data.items || data.data || [])
-
-      // Если API вернул пустой массив или ошибку, используем демо-данные
-      if (!list || list.length === 0) {
-        console.log('API вернул пустой массив, используем демо-данные партнеров')
-        list = getDemoPartners()
-        setIsDemoMode(true)
-      } else {
-        setIsDemoMode(false)
-      }
-
-      console.log('Загруженные партнеры:', list)
-      console.log('Поля первого партнера:', list[0] ? Object.keys(list[0]) : 'Нет партнеров')
+      const list = Array.isArray(data) ? data : (data.items || data.data || [])
       setPartners(list)
-    } catch (err: any) {
-      console.warn('Ошибка загрузки партнеров из API, используем демо-данные:', err.message)
-      // В случае ошибки API используем демо-данные
-      const demoData = getDemoPartners()
-      setPartners(demoData)
-      setIsDemoMode(true)
-      setError(null) // Не показываем ошибку, так как есть демо-данные
     } finally {
       setLoading(false)
     }
@@ -280,18 +222,6 @@ export default function Partners() {
             textShadow: '0 1px 2px rgba(0,0,0,0.2)'
           }}>
             Управление партнерами и их товарами
-            {isDemoMode && (
-              <span style={{
-                display: 'block',
-                fontSize: '12px',
-                marginTop: '4px',
-                opacity: 0.8,
-                color: '#fbbf24',
-                fontWeight: '600'
-              }}>
-                🔧 Демо-режим (показаны примеры с картинками)
-              </span>
-            )}
           </p>
         </div>
         <button
