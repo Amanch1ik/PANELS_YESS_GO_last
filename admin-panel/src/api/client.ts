@@ -232,6 +232,54 @@ export async function getTransaction(id: string | number) {
   throw new Error('Transaction not found')
 }
 
+export async function refundTransaction(id: string | number) {
+  const endpoints = [`/transactions/${id}/refund`, `/admin/transactions/${id}/refund`, `/payments/${id}/refund`]
+  for (const ep of endpoints) {
+    try {
+      const resp = await api.post(ep)
+      if (resp.status >= 200 && resp.status < 300) return resp.data
+    } catch (err: any) {
+      if (err?.response?.status === 404) continue
+      throw err
+    }
+  }
+  throw new Error('Refund endpoint not available')
+}
+
+export async function disputeTransaction(id: string | number) {
+  const endpoints = [`/transactions/${id}/dispute`, `/admin/transactions/${id}/dispute`, `/payments/${id}/dispute`]
+  for (const ep of endpoints) {
+    try {
+      const resp = await api.post(ep)
+      if (resp.status >= 200 && resp.status < 300) return resp.data
+    } catch (err: any) {
+      if (err?.response?.status === 404) continue
+      throw err
+    }
+  }
+  throw new Error('Dispute endpoint not available')
+}
+
+export async function bulkTransactionsAction(ids: Array<string | number>, action: string) {
+  // Try common bulk endpoints
+  const endpoints = ['/transactions/bulk', '/admin/transactions/bulk', '/payments/bulk']
+  for (const ep of endpoints) {
+    try {
+      const resp = await api.post(ep, { ids, action })
+      if (resp.status >= 200 && resp.status < 300) return resp.data
+    } catch (err: any) {
+      if (err?.response?.status === 404) continue
+      throw err
+    }
+  }
+  // As fallback try per-id calls
+  for (const id of ids) {
+    if (action === 'refund') await refundTransaction(id)
+    if (action === 'dispute') await disputeTransaction(id)
+  }
+  return { success: true }
+}
+
 export async function createProduct(payload: Record<string, any>) {
   const resp = await api.post(API_ENDPOINTS.products.create, payload)
   return resp.data

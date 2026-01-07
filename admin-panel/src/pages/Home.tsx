@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts } from '../api/client'
+import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts, fetchRecentActivities } from '../api/client'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -90,6 +90,17 @@ const styles = `
     }
   }
 
+  /* Compact welcome animations */
+  @keyframes welcomeEntranceCompact {
+    0% { opacity: 0; transform: translateY(10px) scale(0.99); filter: blur(3px); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); }
+  }
+
+  @keyframes welcomeExitCompact {
+    0% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); }
+    100% { opacity: 0; transform: translateY(-10px) scale(0.99); filter: blur(5px); }
+  }
+
   @keyframes textReveal {
     0% {
       opacity: 0;
@@ -153,8 +164,13 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
   const [detailedStats, setDetailedStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d'>('30d')
+  const [fromDate, setFromDate] = useState<string | null>(null)
+  const [toDate, setToDate] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(true)
   const [isExiting, setIsExiting] = useState(false)
+  const [recentActivities, setRecentActivities] = useState<any[]>([])
+  const [recentLoading, setRecentLoading] = useState(false)
+  const [recentError, setRecentError] = useState<string | null>(null)
 
   // Auto-hide welcome message after 7 seconds with smooth exit animation (longer reading time)
   useEffect(() => {
@@ -182,8 +198,11 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         let usersData: any = []
         let productsData: any = []
 
+        const params: Record<string, any> = {}
+        if (fromDate) params.from = fromDate
+        if (toDate) params.to = toDate
         try {
-          partnersData = await fetchPartners()
+          partnersData = await fetchPartners(params)
           console.log('✅ Partners data loaded')
         } catch (error: any) {
           console.warn('⚠️ Failed to load partners:', error.message)
@@ -191,7 +210,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         }
 
         try {
-          usersData = await fetchUsers()
+          usersData = await fetchUsers(params)
           console.log('✅ Users data loaded')
         } catch (error: any) {
           console.warn('⚠️ Failed to load users:', error.message)
@@ -199,11 +218,27 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         }
 
         try {
-          productsData = await fetchProducts()
+          productsData = await fetchProducts(params)
           console.log('✅ Products data loaded')
         } catch (error: any) {
           console.warn('⚠️ Failed to load products:', error.message)
           onError?.('Ошибка загрузки продуктов: ' + error.message)
+        }
+
+        // Load recent activities (non-blocking)
+        try {
+          setRecentLoading(true)
+          const activities = await fetchRecentActivities(10, params)
+          // Normalize array shape: if API returns {items: []} or data directly
+          const list = Array.isArray(activities) ? activities : (activities.items || activities.data || [])
+          setRecentActivities((list || []).slice(0, 10))
+          setRecentError(null)
+        } catch (actErr: any) {
+          console.warn('⚠️ Failed to load recent activities:', actErr?.message || actErr)
+          setRecentActivities([])
+          setRecentError(actErr?.message || 'Ошибка загрузки последних действий')
+        } finally {
+          setRecentLoading(false)
         }
 
         const partners = Array.isArray(partnersData) ? partnersData : (partnersData.items || partnersData.data || [])
@@ -300,7 +335,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
     }
 
     loadStats()
-  }, [onError, selectedPeriod])
+  }, [onError, selectedPeriod, fromDate, toDate])
 
   const generateChartData = (partners: any[], users: any[], products: any[], period: string) => {
     const days = period === '7d' ? 7 : period === '30d' ? 30 : 90
@@ -396,89 +431,8 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
   }
 
   return (
-    <div className="container">
-      {/* Заголовок */}
-      {showWelcome && (
-        <div className={`welcome-header ${isExiting ? 'exiting' : ''}`} style={{
-          background: 'var(--gradient-primary)',
-          borderRadius: '16px',
-          padding: '24px',
-          marginBottom: '32px',
-          color: 'var(--white)',
-          boxShadow: 'var(--shadow-lg)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          textAlign: 'center',
-          position: 'relative',
-          overflow: 'hidden',
-          transformStyle: 'preserve-3d',
-          backfaceVisibility: 'hidden'
-        }}>
-          {/* Декоративный градиентный оверлей */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'linear-gradient(45deg, rgba(255,255,255,0.08) 0%, transparent 30%, rgba(255,255,255,0.08) 70%, transparent 100%)',
-            opacity: 0.7,
-            pointerEvents: 'none',
-            animation: 'shimmer 4s ease-in-out infinite 1.5s'
-          }}></div>
-
-          {/* Дополнительные декоративные элементы */}
-          <div style={{
-            position: 'absolute',
-            top: '-50%',
-            left: '-50%',
-            width: '200%',
-            height: '200%',
-            background: 'radial-gradient(circle, rgba(255,255,255,0.03) 0%, transparent 70%)',
-            animation: 'welcomeGlow 6s ease-in-out infinite',
-            pointerEvents: 'none'
-          }}></div>
-
-          {/* Контент */}
-          <div style={{
-            position: 'relative',
-            zIndex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
-            <div className="welcome-text" style={{
-              fontSize: '48px',
-              filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))',
-              textShadow: '0 0 20px rgba(255,255,255,0.3)'
-            }}>
-              🏠
-            </div>
-            <h1 className="welcome-title" style={{
-              margin: 0,
-              fontSize: '32px',
-              fontWeight: '800',
-              color: 'var(--white)',
-              textShadow: '0 3px 6px rgba(0,0,0,0.4), 0 0 30px rgba(255,255,255,0.2)',
-              letterSpacing: '1px',
-              lineHeight: '1.2'
-            }}>
-              🚀 Добро пожаловать в YESS!GO Admin
-            </h1>
-            <p className="welcome-subtitle" style={{
-              margin: 0,
-              opacity: 0.95,
-              fontSize: '18px',
-              textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              letterSpacing: '0.5px',
-              lineHeight: '1.4',
-              maxWidth: '600px'
-            }}>
-              Управляйте партнерами, товарами и пользователями в одном месте
-            </p>
-          </div>
-        </div>
-      )}
+    <div className="container" style={{ paddingTop: '0px' }}>
+      {/* Welcome header removed by user request */}
 
       {/* Панель управления периодом */}
       <div style={{
@@ -494,30 +448,55 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: 'var(--gray-900)' }}>
           📊 Аналитика
         </h3>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {[
-            { key: '7d', label: '7 дней' },
-            { key: '30d', label: '30 дней' },
-            { key: '90d', label: '90 дней' }
-          ].map(period => (
-            <button
-              key={period.key}
-              onClick={() => setSelectedPeriod(period.key as any)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '8px',
-                border: '1px solid var(--gray-300)',
-                background: selectedPeriod === period.key ? 'var(--accent)' : 'var(--white)',
-                color: selectedPeriod === period.key ? 'var(--white)' : 'var(--gray-700)',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {period.label}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {[
+              { key: '7d', label: '7 дней', days: 7 },
+              { key: '30d', label: '30 дней', days: 30 },
+              { key: '90d', label: '90 дней', days: 90 }
+            ].map(period => (
+              <button
+                key={period.key}
+                onClick={() => {
+                  setSelectedPeriod(period.key as any)
+                  const to = new Date()
+                  const from = subDays(to, period.days - 1)
+                  setFromDate(format(from, 'yyyy-MM-dd'))
+                  setToDate(format(to, 'yyyy-MM-dd'))
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--gray-300)',
+                  background: selectedPeriod === period.key ? 'var(--accent)' : 'var(--white)',
+                  color: selectedPeriod === period.key ? 'var(--white)' : 'var(--gray-700)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {period.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Date range picker */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="date"
+              value={fromDate || ''}
+              onChange={(e) => setFromDate(e.target.value || null)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--gray-300)' }}
+            />
+            <span style={{ color: 'var(--gray-500)' }}>→</span>
+            <input
+              type="date"
+              value={toDate || ''}
+              onChange={(e) => setToDate(e.target.value || null)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--gray-300)' }}
+            />
+          </div>
         </div>
       </div>
 
@@ -823,38 +802,67 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             🔔 Последние действия
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {[
-              { time: '2 мин назад', action: 'Добавлен новый партнер', icon: '🏪' },
-              { time: '15 мин назад', action: 'Обновлен товар', icon: '📦' },
-              { time: '1 час назад', action: 'Зарегистрирован пользователь', icon: '👤' },
-              { time: '2 часа назад', action: 'Изменен статус партнера', icon: '⚙️' },
-              { time: '3 часа назад', action: 'Удален товар', icon: '🗑️' }
-            ].map((item, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px',
-                background: 'var(--gray-50)',
-                borderRadius: '8px'
-              }}>
-                <span style={{ fontSize: '20px' }}>{item.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: 'var(--gray-900)'
+            {recentLoading ? (
+              <div style={{ padding: 12, textAlign: 'center', color: 'var(--gray-500)' }}>Загрузка...</div>
+            ) : recentError ? (
+              <div style={{ padding: 12, textAlign: 'center', color: '#ef4444' }}>{recentError}</div>
+            ) : (recentActivities.length === 0 ? (
+              <div style={{ padding: 12, textAlign: 'center', color: 'var(--gray-500)' }}>Нет последних действий</div>
+            ) : (
+              recentActivities.slice(0, 10).map((item: any, index: number) => {
+                // Try to infer fields: action/title/message, created_at/date/time, and an optional type to pick an icon
+                const text = item.action || item.title || item.message || item.name || 'Событие'
+                const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
+                const timeDisplay = (() => {
+                  try {
+                    if (!dateVal) return ''
+                    const d = new Date(dateVal)
+                    const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+                    if (diff < 60) return `${diff} сек назад`
+                    if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
+                    if (diff < 86400) return `${Math.floor(diff / 3600)} час(ов) назад`
+                    return `${Math.floor(diff / 86400)} дн назад`
+                  } catch (e) {
+                    return String(dateVal)
+                  }
+                })()
+                // Pick an icon by type or keywords
+                const type = (item.type || item.event || '').toString().toLowerCase()
+                let icon = '🔔'
+                if (type.includes('partner') || /partner/i.test(text)) icon = '🏪'
+                else if (type.includes('product') || /товар|product/i.test(text)) icon = '📦'
+                else if (type.includes('user') || /пользователь|user|register/i.test(text)) icon = '👤'
+                else if (type.includes('delete') || /удален|delete/i.test(text)) icon = '🗑️'
+                else if (type.includes('status') || /статус/i.test(text)) icon = '⚙️'
+
+                return (
+                  <div key={index} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '12px',
+                    background: 'var(--gray-50)',
+                    borderRadius: '8px'
                   }}>
-                    {item.action}
+                    <span style={{ fontSize: '20px' }}>{icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: 'var(--gray-900)'
+                      }}>
+                        {text}
+                      </div>
+                      <div style={{
+                        fontSize: '12px',
+                        color: 'var(--gray-500)'
+                      }}>
+                        {timeDisplay}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{
-                    fontSize: '12px',
-                    color: 'var(--gray-500)'
-                  }}>
-                    {item.time}
-                  </div>
-                </div>
-              </div>
+                )
+              })
             ))}
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { fetchTransactions, getTransaction } from '../api/client'
+import { fetchTransactions, getTransaction, bulkTransactionsAction, refundTransaction, disputeTransaction } from '../api/client'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 type Transaction = {
@@ -25,6 +25,13 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
   const [toDate, setToDate] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
+  const [partnerFilter, setPartnerFilter] = useState<string | null>(null)
+  const [methodFilter, setMethodFilter] = useState<string | null>(null)
+  const [referenceFilter, setReferenceFilter] = useState<string | null>(null)
+  const [currencyFilter, setCurrencyFilter] = useState<string | null>(null)
+  const [sortBy, setSortBy] = useState<string | null>('created_at')
+  const [sortOrder, setSortOrder] = useState<'asc'|'desc'>('desc')
+  const [selectedIds, setSelectedIds] = useState<Array<string | number>>([])
   const [selected, setSelected] = useState<Transaction | null>(null)
 
   const load = async () => {
@@ -36,6 +43,12 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
       if (toDate) params.to = toDate
       if (typeFilter) params.type = typeFilter
       if (statusFilter) params.status = statusFilter
+      if (partnerFilter) params.partner = partnerFilter
+      if (methodFilter) params.method = methodFilter
+      if (referenceFilter) params.reference = referenceFilter
+      if (currencyFilter) params.currency = currencyFilter
+      if (sortBy) params.sort = sortBy
+      if (sortOrder) params.order = sortOrder
       const resp: any = await fetchTransactions(params)
       // normalize
       const items = Array.isArray(resp) ? resp : (resp.items || resp.data || [])
@@ -88,6 +101,57 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
     URL.revokeObjectURL(url)
   }
 
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(transactions.map(t => t.id))
+    } else {
+      setSelectedIds([])
+    }
+  }
+
+  const toggleSelect = (id: string|number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const performBulk = async (action: 'refund'|'dispute'|'export') => {
+    if (selectedIds.length === 0) return alert('Не выбраны транзакции')
+    try {
+      if (action === 'export') {
+        const rows = transactions.filter(t => selectedIds.includes(t.id)).map(t => ({
+          id: t.id,
+          date: t.created_at,
+          user: t.user?.name || t.user?.email || t.user || '',
+          type: t.type,
+          amount: t.amount,
+          currency: t.currency,
+          status: t.status,
+          reference: t.reference
+        }))
+        const keys = Object.keys(rows[0] || {})
+        const csv = [keys.join(',')].concat(rows.map(r => keys.map(k => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))).join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `transactions-selected-${new Date().toISOString().slice(0,10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+        return
+      }
+
+      // For actions refund/dispute use bulk endpoint if available
+      const resp = await bulkTransactionsAction(selectedIds, action)
+      console.log('Bulk action response', resp)
+      // fallback: if resp indicates per-id results, reload
+      await load()
+      setSelectedIds([])
+      alert(`Bulk action ${action} completed`)
+    } catch (err: any) {
+      console.error('Bulk action failed', err)
+      onError?.(err?.message || 'Bulk action failed')
+    }
+  }
+
   return (
     <div className="container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -123,18 +187,21 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--gray-200)' }}>
-              <th style={{ padding: 8 }}>ID</th>
+              <th style={{ padding: 8 }}><input type="checkbox" checked={selectedIds.length === transactions.length && transactions.length>0} onChange={e => toggleSelectAll(e.target.checked)} /></th>
+              <th style={{ padding: 8, cursor: 'pointer' }} onClick={() => { setSortBy('id'); setSortOrder(s => s === 'asc' ? 'desc' : 'asc') }}>ID</th>
               <th style={{ padding: 8 }}>Дата</th>
+              <th style={{ padding: 8, cursor: 'pointer' }} onClick={() => { setSortBy('created_at'); setSortOrder(s => s === 'asc' ? 'desc' : 'asc') }}>Дата</th>
               <th style={{ padding: 8 }}>Пользователь</th>
-              <th style={{ padding: 8 }}>Тип</th>
-              <th style={{ padding: 8 }}>Сумма</th>
-              <th style={{ padding: 8 }}>Статус</th>
+              <th style={{ padding: 8, cursor: 'pointer' }} onClick={() => { setSortBy('type'); setSortOrder(s => s === 'asc' ? 'desc' : 'asc') }}>Тип</th>
+              <th style={{ padding: 8, cursor: 'pointer' }} onClick={() => { setSortBy('amount'); setSortOrder(s => s === 'asc' ? 'desc' : 'asc') }}>Сумма</th>
+              <th style={{ padding: 8, cursor: 'pointer' }} onClick={() => { setSortBy('status'); setSortOrder(s => s === 'asc' ? 'desc' : 'asc') }}>Статус</th>
               <th style={{ padding: 8 }}>Действия</th>
             </tr>
           </thead>
           <tbody>
             {transactions.map(t => (
               <tr key={String(t.id)} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+                <td style={{ padding: 8 }}><input type="checkbox" checked={selectedIds.includes(t.id)} onChange={() => toggleSelect(t.id)} /></td>
                 <td style={{ padding: 8 }}>{t.id}</td>
                 <td style={{ padding: 8 }}>{t.created_at ? new Date(t.created_at).toLocaleString() : ''}</td>
                 <td style={{ padding: 8 }}>{t.user?.name || t.user?.email || t.user || ''}</td>
@@ -154,8 +221,16 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
             Страница {page}{total ? ` из ${Math.ceil(total / limit)}` : ''}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
+            <select value={limit} onChange={e => { setLimit(Number(e.target.value)); setPage(1) }}>
+              {[10,25,50,100].map(v => <option key={v} value={v}>{v} / стр</option>)}
+            </select>
             <button className="button" onClick={() => setPage(p => Math.max(1, p - 1))}>Назад</button>
             <button className="button" onClick={() => setPage(p => p + 1)}>Вперёд</button>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 12 }}>
+              <button className="button" onClick={() => performBulk('refund')}>Отметить возврат</button>
+              <button className="button" onClick={() => performBulk('dispute')}>Отметить спорным</button>
+              <button className="button" onClick={() => performBulk('export')}>Экспорт выбранных</button>
+            </div>
           </div>
         </div>
       </div>
