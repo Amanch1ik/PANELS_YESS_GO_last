@@ -1,8 +1,11 @@
 import axios from 'axios'
 import { API_ENDPOINTS } from "../config/apiEndpoints"
 
-// Use Vite environment variable for API base URL; default to empty string to enable dev proxy
-const API_BASE = (((import.meta as any).env?.VITE_API_BASE) ?? '')
+// Use Vite environment variable for API base URL with fallback
+// Priority: VITE_API_BASE > environment-specific URLs > default
+const API_BASE = ((import.meta as any).env?.VITE_API_BASE) ||
+                 ((import.meta as any).env?.PROD ? 'https://api.yessgo.org/api/v1' :
+                  ((import.meta as any).env?.DEV ? '' : 'https://api.yessgo.org/api/v1'))
 
 const api = axios.create({
   baseURL: API_BASE,
