@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5174,
+    port: 5175,
     proxy: {
       '/auth': {
         target: 'https://api.yessgo.org',
@@ -62,6 +62,44 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/partner/, '/api/v1/partner')
       }
     }
+  },
+  build: {
+    // Увеличиваем лимит размера чанка
+    chunkSizeWarningLimit: 1000,
+    // Code splitting
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Разделяем React и связанные библиотеки
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          // Разделяем UI библиотеки
+          'ui-vendor': ['recharts'],
+          // Разделяем утилиты
+          'utils-vendor': ['axios', 'date-fns']
+        }
+      }
+    },
+    // Оптимизации для production
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      }
+    },
+    // Source maps для production (опционально)
+    sourcemap: false,
+    // CSS код-сплиттинг
+    cssCodeSplit: true,
+    // Оптимизация изображений
+    assetsInlineLimit: 4096,
+    // Настройки для chunks
+    reportCompressedSize: false
+  },
+  // Оптимизации зависимостей
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'axios', 'recharts', 'date-fns']
   }
 })
 

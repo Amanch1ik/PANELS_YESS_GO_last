@@ -100,7 +100,7 @@ type Product = {
   createdAt?: string
 }
 
-export default function PartnerDetail() {
+export default function PartnerDetail({ onError }: { onError?: (msg: string) => void }) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [partner, setPartner] = useState<Partner | null>(null)
@@ -134,18 +134,33 @@ export default function PartnerDetail() {
         return
       }
 
+      console.log('📦 Загружен партнер:', currentPartner)
+      console.log('🖼️ Поля партнера:', Object.keys(currentPartner))
+      console.log('🖼️ Картинка партнера:', currentPartner.imageUrl || currentPartner.image || currentPartner.logo)
+
       setPartner(currentPartner)
 
       // Загружаем товары партнера
       try {
         const productsData = await fetchPartnerProducts(id)
         const productsList = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
+        console.log('📦 Загружены товары партнера:', productsList)
+        if (productsList.length > 0) {
+          console.log('🖼️ Первый товар:', productsList[0])
+          console.log('🖼️ Поля товара:', Object.keys(productsList[0]))
+          console.log('🖼️ Картинка товара:', productsList[0].imageUrl || productsList[0].image)
+          console.log('📊 Stock значения товаров:', productsList.map(p => ({ name: p.name, stock: p.stock })))
+
+          // Подсчет товаров по наличию
+          const inStock = productsList.filter(p => p.stock !== undefined && p.stock !== null && p.stock > 0).length
+          const outOfStock = productsList.filter(p => p.stock === undefined || p.stock === null || p.stock <= 0).length
+          console.log('📊 Статистика наличия:', { inStock, outOfStock, total: productsList.length })
+        }
         setProducts(productsList)
       } catch (productsError) {
         console.warn('Ошибка загрузки товаров партнера:', productsError)
         setProducts([])
       }
-
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Ошибка загрузки данных')
     } finally {
@@ -231,8 +246,24 @@ export default function PartnerDetail() {
   }
 
   const getPartnerImage = (partnerData: Partner) => {
-    const imageSrc = partnerData.imageUrl || partnerData.image || partnerData.logo || partnerData.avatar || partnerData.photo
+    // Проверяем различные возможные поля с картинками
+    let imageSrc = partnerData.imageUrl || partnerData.image || partnerData.logo ||
+                   partnerData.avatar || partnerData.photo || partnerData.picture
+
+    // Если это массив изображений, берем первое
+    if (Array.isArray(partnerData.images) && partnerData.images.length > 0) {
+      imageSrc = partnerData.images[0]
+    }
+    if (Array.isArray(partnerData.photos) && partnerData.photos.length > 0) {
+      imageSrc = partnerData.photos[0]
+    }
+
+    // Проверяем, что это валидная строка URL
     if (imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== '') {
+      // Если это относительный путь, добавляем базовый URL
+      if (!imageSrc.startsWith('http') && !imageSrc.startsWith('data:')) {
+        imageSrc = `https://api.yessgo.org${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`
+      }
       return imageSrc
     }
     return null
@@ -475,7 +506,10 @@ export default function PartnerDetail() {
               color: '#16a34a',
               marginBottom: '4px'
             }}>
-              {products.filter(p => (p.stock || 0) > 0).length}
+              {products.filter(p => {
+                const stock = p.stock
+                return stock !== undefined && stock !== null && stock > 0
+              }).length}
             </div>
             <div style={{
               fontSize: '12px',
@@ -494,7 +528,10 @@ export default function PartnerDetail() {
               color: '#dc2626',
               marginBottom: '4px'
             }}>
-              {products.filter(p => (p.stock || 0) === 0).length}
+              {products.filter(p => {
+                const stock = p.stock
+                return stock === undefined || stock === null || stock <= 0
+              }).length}
             </div>
             <div style={{
               fontSize: '12px',
@@ -513,7 +550,7 @@ export default function PartnerDetail() {
               color: '#7c3aed',
               marginBottom: '4px'
             }}>
-              {products.length > 0 ? Math.round(products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length) : 0}$
+              {products.length > 0 ? Math.round(products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length) : 0} сом
             </div>
             <div style={{
               fontSize: '12px',
@@ -576,26 +613,48 @@ export default function PartnerDetail() {
                 justifyContent: 'center',
                 border: '1px solid var(--gray-200)'
               }}>
-                {product.imageUrl ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      display: 'block'
-                    }}
-                    onError={(e) => {
-                      const target = e.currentTarget.parentElement
-                      if (target) {
-                        target.innerHTML = '<div style="font-size: 48px; opacity: 0.5;">📦</div>'
-                      }
-                    }}
-                  />
-                ) : (
-                  <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
-                )}
+                {(() => {
+                  // Проверяем различные поля с картинками
+                  let imageSrc = product.imageUrl || product.image || product.photo ||
+                                 product.picture || product.thumbnail
+
+                  // Если массив изображений, берем первое
+                  if (Array.isArray(product.images) && product.images.length > 0) {
+                    imageSrc = product.images[0]
+                  }
+                  if (Array.isArray(product.photos) && product.photos.length > 0) {
+                    imageSrc = product.photos[0]
+                  }
+
+                  // Проверяем валидность и добавляем базовый URL если нужно
+                  if (imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== '') {
+                    if (!imageSrc.startsWith('http') && !imageSrc.startsWith('data:')) {
+                      imageSrc = `https://api.yessgo.org${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`
+                    }
+
+                    return (
+                      <img
+                        src={imageSrc}
+                        alt={product.name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block'
+                        }}
+                        onError={(e) => {
+                          console.warn(`❌ Ошибка загрузки картинки товара ${product.id}:`, imageSrc)
+                          const target = e.currentTarget.parentElement
+                          if (target) {
+                            target.innerHTML = '<div style="font-size: 48px; opacity: 0.5;">📦</div>'
+                          }
+                        }}
+                      />
+                    )
+                  } else {
+                    return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
+                  }
+                })()}
               </div>
 
               {/* Информация о товаре */}
@@ -637,7 +696,7 @@ export default function PartnerDetail() {
                     fontWeight: '700',
                     color: 'var(--accent)'
                   }}>
-                    ${product.price || 0}
+                    {product.price || 0} сом
                   </div>
 
                   <div style={{
@@ -645,10 +704,23 @@ export default function PartnerDetail() {
                     borderRadius: '12px',
                     fontSize: '12px',
                     fontWeight: '600',
-                    background: product.stock && product.stock > 0 ? '#dcfce7' : '#fee2e2',
-                    color: product.stock && product.stock > 0 ? '#16a34a' : '#dc2626'
+                    background: (() => {
+                      const stock = product.stock
+                      return (stock !== undefined && stock !== null && stock > 0) ? '#dcfce7' : '#fee2e2'
+                    })(),
+                    color: (() => {
+                      const stock = product.stock
+                      return (stock !== undefined && stock !== null && stock > 0) ? '#16a34a' : '#dc2626'
+                    })()
                   }}>
-                    {product.stock && product.stock > 0 ? `✅ ${product.stock} шт.` : '❌ Нет в наличии'}
+                    {(() => {
+                      const stock = product.stock
+                      if (stock !== undefined && stock !== null && stock > 0) {
+                        return `✅ ${stock} шт.`
+                      } else {
+                        return '❌ Нет в наличии'
+                      }
+                    })()}
                   </div>
                 </div>
 

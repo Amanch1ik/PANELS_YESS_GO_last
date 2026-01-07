@@ -24,19 +24,24 @@ function getStoredRefreshToken(): string | null {
 }
 
 export function setAuthToken(accessToken: string | null, refreshToken: string | null = null) {
+  console.log('🔑 setAuthToken called:', { accessToken: !!accessToken, refreshToken: !!refreshToken })
   if (accessToken) {
     api.defaults.headers.common.Authorization = `Bearer ${accessToken}`
     localStorage.setItem(ACCESS_KEY, accessToken)
+    console.log('✅ Access token saved to localStorage')
   } else {
     delete api.defaults.headers.common.Authorization
     localStorage.removeItem(ACCESS_KEY)
+    console.log('🗑️ Access token removed from localStorage')
   }
   if (refreshToken) {
     localStorage.setItem(REFRESH_KEY, refreshToken)
+    console.log('✅ Refresh token saved to localStorage')
   } else if (refreshToken === null) {
     // do nothing when null passed explicitly
   } else {
     localStorage.removeItem(REFRESH_KEY)
+    console.log('🗑️ Refresh token removed from localStorage')
   }
 }
 
@@ -48,11 +53,14 @@ export async function login(username: string, password: string) {
   }
 
   try {
+    console.log('🔐 Attempting admin login...')
     const resp = await api.post(API_ENDPOINTS.auth.adminLogin, loginData)
     const d = resp.data || {}
+    console.log('📥 Login response:', d)
     // The API returns AccessToken and RefreshToken in PascalCase
     const access = d.AccessToken || d.token || d.accessToken || d.access_token
     const refresh = d.RefreshToken || d.refreshToken || d.refresh_token
+    console.log('🔑 Tokens found:', { access: !!access, refresh: !!refresh })
     if (access) {
       setAuthToken(access, refresh || null)
     }
@@ -108,6 +116,7 @@ let refreshQueue: Array<{ resolve: (token: string) => void, reject: (err: any) =
 
 async function attemptRefresh(): Promise<string> {
   const refreshToken = getStoredRefreshToken()
+  console.log('🔄 Attempting token refresh, refresh token exists:', !!refreshToken)
   if (!refreshToken) throw new Error('No refresh token available')
 
   // The API expects RefreshToken in PascalCase
@@ -118,7 +127,9 @@ async function attemptRefresh(): Promise<string> {
   }
 
   try {
+    console.log('📤 Sending refresh request...')
     const resp = await api.post(API_ENDPOINTS.auth.refresh, refreshData)
+    console.log('📥 Refresh response:', resp.data)
     const d = resp.data || {}
     // The API returns AccessToken in PascalCase
     const access = d.AccessToken || d.access_token || d.token || d.accessToken
@@ -169,8 +180,13 @@ api.interceptors.response.use(
         refreshQueue.forEach(q => q.reject(refreshErr))
         refreshQueue = []
         isRefreshing = false
-        // clear tokens
+        // clear tokens and redirect to login
         setAuthToken(null, null)
+        console.warn('🔐 Токен истек, перенаправление на страницу входа...')
+        // Small delay to show error message before redirect
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 1000)
         return Promise.reject(refreshErr)
       }
     }

@@ -175,8 +175,11 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
         } else {
           setError(msg)
         }
+        onError?.(msg)
       })
       .finally(() => setLoading(false))
+
+    return () => { mounted = false }
 
     return () => { mounted = false }
   }, [])

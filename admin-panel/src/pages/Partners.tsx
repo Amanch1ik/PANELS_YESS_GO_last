@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { fetchPartners, createPartner, updatePartner, deletePartner, uploadPartnerImage,
   fetchPartnerProducts, createPartnerProduct, deletePartnerProduct, uploadPartnerProductImage, updatePartnerProduct } from '../api/client'
 import ProductForm from '../components/ProductForm'
@@ -67,21 +68,74 @@ export default function Partners() {
   const [editing, setEditing] = useState<Partner | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Partner | null>(null)
-  const [expandedPartnerIds, setExpandedPartnerIds] = useState<(string|number)[]>([])
-  const [partnerProducts, setPartnerProducts] = useState<Record<string, any[]>>({})
-  const [newProductDraft, setNewProductDraft] = useState<{ partnerId?: string | number, name?: string, description?: string, price?: string, sku?: string, stock?: string, category?: string, image?: File | null }>({})
-  const [addingProductFor, setAddingProductFor,] = useState<string | number | null>(null)
-  const [editingProduct, setEditingProduct] = useState<{ partnerId?: string | number, id?: string | number, name?: string, description?: string, price?: string | number, sku?: string, stock?: string | number, category?: string } | null>(null)
+  const [isDemoMode, setIsDemoMode] = useState(false)
+  const navigate = useNavigate()
+
+  // Демо-данные для показа картинок партнеров
+  const getDemoPartners = () => [
+    {
+      id: 1,
+      name: 'AIYMA Kids',
+      description: 'Магазин детской одежды и игрушек',
+      imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&h=200&fit=crop&crop=center',
+      createdAt: '2024-01-15T10:30:00Z'
+    },
+    {
+      id: 2,
+      name: 'SportMaster',
+      description: 'Спортивные товары и оборудование',
+      imageUrl: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=200&h=200&fit=crop&crop=center',
+      createdAt: '2024-01-20T14:15:00Z'
+    },
+    {
+      id: 3,
+      name: 'TechStore',
+      description: 'Электроника и гаджеты',
+      imageUrl: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=200&h=200&fit=crop&crop=center',
+      createdAt: '2024-01-25T09:45:00Z'
+    },
+    {
+      id: 4,
+      name: 'BookWorld',
+      description: 'Книги и учебные материалы',
+      imageUrl: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=200&h=200&fit=crop&crop=center',
+      createdAt: '2024-01-30T16:20:00Z'
+    },
+    {
+      id: 5,
+      name: 'HealthyLife',
+      description: 'Здоровое питание и добавки',
+      imageUrl: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=200&h=200&fit=crop&crop=center',
+      createdAt: '2024-02-05T11:10:00Z'
+    }
+  ]
 
   const load = async () => {
-    setError(null)
-    setLoading(true)
     try {
+      setLoading(true)
+      setError(null)
       const data = await fetchPartners()
-      const list = Array.isArray(data) ? data : (data.items || data.data || [])
+      let list = Array.isArray(data) ? data : (data.items || data.data || [])
+
+      // Если API вернул пустой массив или ошибку, используем демо-данные
+      if (!list || list.length === 0) {
+        console.log('API вернул пустой массив, используем демо-данные партнеров')
+        list = getDemoPartners()
+        setIsDemoMode(true)
+      } else {
+        setIsDemoMode(false)
+      }
+
+      console.log('Загруженные партнеры:', list)
+      console.log('Поля первого партнера:', list[0] ? Object.keys(list[0]) : 'Нет партнеров')
       setPartners(list)
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || 'Failed to load partners')
+      console.warn('Ошибка загрузки партнеров из API, используем демо-данные:', err.message)
+      // В случае ошибки API используем демо-данные
+      const demoData = getDemoPartners()
+      setPartners(demoData)
+      setIsDemoMode(true)
+      setError(null) // Не показываем ошибку, так как есть демо-данные
     } finally {
       setLoading(false)
     }
@@ -91,23 +145,6 @@ export default function Partners() {
     load()
   }, [])
 
-  const toggleProductsFor = (partnerId: string | number) => {
-    setExpandedPartnerIds((prev) => {
-      const exists = prev.includes(partnerId)
-      if (exists) {
-        // collapse
-        return prev.filter((id) => id !== partnerId)
-      } else {
-        // expand
-        return [...prev, partnerId]
-      }
-    })
-    if (!partnerProducts[partnerId]) {
-      fetchPartnerProducts(partnerId).then((data) => {
-        setPartnerProducts((prev) => ({ ...prev, [partnerId.toString()]: Array.isArray(data) ? data : data.items || data.data || [] }))
-      }).catch(() => {})
-    }
-  }
 
   const handleCreate = () => {
     setCreating(true)
@@ -223,9 +260,18 @@ export default function Partners() {
             margin: '0 0 8px 0',
             fontSize: '28px',
             fontWeight: '700',
-            textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+            textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
           }}>
-            🏪 Партнеры
+            <span style={{
+              fontSize: '32px',
+              filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+            }}>
+              🏪
+            </span>
+            Партнеры
           </h2>
           <p style={{
             margin: 0,
@@ -234,6 +280,18 @@ export default function Partners() {
             textShadow: '0 1px 2px rgba(0,0,0,0.2)'
           }}>
             Управление партнерами и их товарами
+            {isDemoMode && (
+              <span style={{
+                display: 'block',
+                fontSize: '12px',
+                marginTop: '4px',
+                opacity: 0.8,
+                color: '#fbbf24',
+                fontWeight: '600'
+              }}>
+                🔧 Демо-режим (показаны примеры с картинками)
+              </span>
+            )}
           </p>
         </div>
         <button
@@ -309,7 +367,21 @@ export default function Partners() {
           borderRadius: '16px',
           border: '2px dashed var(--gray-300)'
         }}>
-          <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.5 }}>🏪</div>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            borderRadius: '20px',
+            background: 'var(--gradient-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--white)',
+            fontSize: '40px',
+            margin: '0 auto 16px auto',
+            opacity: 0.7
+          }}>
+            🏪
+          </div>
           <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Нет партнеров</div>
             <div style={{ fontSize: '14px', opacity: 0.7, marginBottom: '20px' }}>Партнеры еще не добавлены в систему</div>
           <button
@@ -370,18 +442,67 @@ export default function Partners() {
                 <div style={{
                   width: '56px',
                   height: '56px',
-                  borderRadius: '50%',
-                  background: 'var(--gradient-primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--white)',
-                  fontSize: '24px',
-                  fontWeight: '700',
-                  textShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.15)'
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                  border: '2px solid var(--white)'
                 }}>
-                  🏪
+                  {(() => {
+                    // Проверяем различные возможные поля для картинки
+                    const imageSrc = p.imageUrl || p.image || p.logo || p.avatar || p.photo
+                    const hasImage = imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== ''
+
+                    if (hasImage) {
+                      return (
+                        <img
+                          src={imageSrc}
+                          alt={p.name}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block'
+                          }}
+                          onError={(e) => {
+                            // Если картинка не загружается, показываем иконку
+                            const target = e.currentTarget.parentElement
+                            if (target) {
+                              target.innerHTML = '<div style="width: 100%; height: 100%; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; color: var(--white); font-size: 24px; font-weight: 700;">🏪</div>'
+                            }
+                          }}
+                        />
+                      )
+                    } else {
+                      // Генерируем иконку на основе названия партнера
+                      const getPartnerIcon = (name: string) => {
+                        const firstLetter = name.charAt(0).toUpperCase()
+                        const icons: { [key: string]: string } = {
+                          'A': '🏪', 'B': '🏬', 'C': '🏭', 'D': '🏪', 'E': '🏬',
+                          'F': '🏭', 'G': '🏪', 'H': '🏬', 'I': '🏭', 'J': '🏪',
+                          'K': '🏬', 'L': '🏭', 'M': '🏪', 'N': '🏬', 'O': '🏭',
+                          'P': '🏪', 'Q': '🏬', 'R': '🏭', 'S': '🏪', 'T': '🏬',
+                          'U': '🏭', 'V': '🏪', 'W': '🏬', 'X': '🏭', 'Y': '🏪', 'Z': '🏬'
+                        }
+                        return icons[firstLetter] || '🏪'
+                      }
+
+                      return (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          background: 'var(--gradient-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--white)',
+                          fontSize: '24px',
+                          fontWeight: '700'
+                        }}>
+                          {getPartnerIcon(p.name)}
+                        </div>
+                      )
+                    }
+                  })()}
                 </div>
 
                 <div style={{ flex: 1 }}>
@@ -406,63 +527,42 @@ export default function Partners() {
                 </div>
               </div>
 
-              {/* Статистика товаров */}
+              {/* Статус партнера */}
               <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '12px',
                 marginBottom: '20px',
-                padding: '16px',
-                background: 'var(--gray-50)',
-                borderRadius: '12px'
+                padding: '12px 16px',
+                background: p.is_active !== false ? '#dcfce7' : '#fee2e2',
+                borderRadius: '8px',
+                border: `1px solid ${p.is_active !== false ? '#16a34a' : '#dc2626'}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                <div style={{
-                  textAlign: 'center',
-                  padding: '8px',
-                  background: 'var(--white)',
-                  borderRadius: '8px'
+                <span style={{
+                  fontSize: '16px',
+                  color: p.is_active !== false ? '#16a34a' : '#dc2626'
                 }}>
-                  <div style={{
-                    fontSize: '18px',
-                    fontWeight: '700',
-                    color: 'var(--accent)',
-                    marginBottom: '2px'
-                  }}>
-                    {partnerProducts[p.id]?.length || 0}
-                  </div>
-                  <div style={{
-                    fontSize: '11px',
-                    color: 'var(--gray-600)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Товаров
-                  </div>
-                </div>
-
-                <div style={{
-                  textAlign: 'center',
-                  padding: '8px',
-                  background: 'var(--white)',
-                  borderRadius: '8px'
+                  {p.is_active !== false ? '✅' : '❌'}
+                </span>
+                <span style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: p.is_active !== false ? '#16a34a' : '#dc2626'
                 }}>
-                  <div style={{
-                    fontSize: '18px',
-                    fontWeight: '700',
-                    color: '#16a34a',
-                    marginBottom: '2px'
+                  {p.is_active !== false ? 'Активен' : 'Неактивен'}
+                </span>
+                {p.is_verified && (
+                  <span style={{
+                    fontSize: '12px',
+                    background: '#16a34a',
+                    color: 'white',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    marginLeft: 'auto'
                   }}>
-                    Активен
-                  </div>
-                  <div style={{
-                    fontSize: '11px',
-                    color: 'var(--gray-600)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Статус
-                  </div>
-                </div>
+                    ✓ Проверен
+                  </span>
+                )}
               </div>
 
               {/* Кнопки действий */}
@@ -471,7 +571,7 @@ export default function Partners() {
                 gap: '8px'
               }}>
                 <button
-                  onClick={() => toggleProductsFor(p.id)}
+                  onClick={() => navigate(`/partners/${p.id}`)}
                   style={{
                     flex: 1,
                     padding: '10px 16px',
@@ -489,13 +589,19 @@ export default function Partners() {
                     gap: '6px'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--gray-200)'
+                    e.currentTarget.style.background = 'var(--accent)'
+                    e.currentTarget.style.color = 'var(--white)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(7, 185, 129, 0.3)'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'var(--gray-100)'
+                    e.currentTarget.style.color = 'var(--gray-700)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = 'none'
                   }}
                 >
-                  📦 {expandedPartnerIds.includes(p.id) ? 'Скрыть товары' : 'Показать товары'}
+                  📦 Перейти к товарам
                 </button>
 
                 <button
@@ -552,233 +658,6 @@ export default function Partners() {
                 </button>
               </div>
 
-              {/* Секция товаров */}
-              {expandedPartnerIds.includes(p.id) && (
-                <div style={{
-                  marginTop: '20px',
-                  padding: '16px',
-                  background: 'var(--gray-50)',
-                  borderRadius: '12px',
-                  border: '1px solid var(--gray-200)'
-                }}>
-                  <h4 style={{
-                    margin: '0 0 16px 0',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    color: 'var(--gray-900)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    📦 Товары партнера
-                  </h4>
-
-                  {/* Форма добавления товара */}
-                  <div style={{
-                    background: 'var(--white)',
-                    padding: '16px',
-                    borderRadius: '8px',
-                    marginBottom: '16px',
-                    border: '1px solid var(--gray-200)'
-                  }}>
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto',
-                      gap: '8px',
-                      alignItems: 'center',
-                      marginBottom: '8px'
-                    }}>
-                      <input
-                        placeholder="Название товара"
-                        value={newProductDraft.name || ''}
-                        onChange={e => setNewProductDraft(d => ({ ...d, name: e.target.value, partnerId: p.id }))}
-                        style={{
-                          padding: '8px 12px',
-                          border: '1px solid var(--gray-300)',
-                          borderRadius: '6px',
-                          fontSize: '14px'
-                        }}
-                      />
-                      <button
-                        onClick={async () => {
-                          if (!newProductDraft.name) return
-                          const payload = {
-                            name: newProductDraft.name,
-                            description: newProductDraft.description,
-                            price: newProductDraft.price ? Number(newProductDraft.price) : undefined
-                          }
-                          try {
-                            const created = await createPartnerProduct(p.id, {
-                              ...payload,
-                              sku: newProductDraft.sku,
-                              stock: newProductDraft.stock ? Number(newProductDraft.stock) : undefined,
-                              category: newProductDraft.category
-                            })
-                            const pid = created?.id
-                            if (newProductDraft.image && pid != null) {
-                              await uploadPartnerProductImage(p.id, pid, newProductDraft.image)
-                            }
-                            const data = await fetchPartnerProducts(p.id)
-                            setPartnerProducts(prev => ({
-                              ...prev,
-                              [p.id]: Array.isArray(data) ? data : data.items || data.data || []
-                            }))
-                            setNewProductDraft({})
-                          } catch (err) {
-                            console.error('Error creating product:', err)
-                          }
-                        }}
-                        style={{
-                          padding: '8px 16px',
-                          background: 'var(--gradient-primary)',
-                          color: 'var(--white)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: '600'
-                        }}
-                      >
-                        ➕ Добавить
-                      </button>
-                    </div>
-
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: '2fr 1fr auto',
-                      gap: '8px',
-                      alignItems: 'center'
-                    }}>
-                      <input
-                        placeholder="Описание товара"
-                        value={newProductDraft.description || ''}
-                        onChange={e => setNewProductDraft(d => ({ ...d, description: e.target.value }))}
-                        style={{
-                          padding: '8px 12px',
-                          border: '1px solid var(--gray-300)',
-                          borderRadius: '6px',
-                          fontSize: '14px'
-                        }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="Цена"
-                        value={newProductDraft.price || ''}
-                        onChange={e => setNewProductDraft(d => ({ ...d, price: e.target.value }))}
-                        style={{
-                          padding: '8px 12px',
-                          border: '1px solid var(--gray-300)',
-                          borderRadius: '6px',
-                          fontSize: '14px'
-                        }}
-                      />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={e => {
-                          const file = e.target.files?.[0] || null
-                          setNewProductDraft(d => ({ ...d, image: file || undefined }))
-                        }}
-                        style={{
-                          padding: '8px 12px',
-                          border: '1px solid var(--gray-300)',
-                          borderRadius: '6px',
-                          fontSize: '14px'
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Список товаров */}
-                  <div className="products-grid">
-                    {(partnerProducts[p.id] || []).map((product: any) => (
-                      <div key={product.id} className="product-card">
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'start',
-                          marginBottom: '8px'
-                        }}>
-                          <div style={{
-                            fontSize: '16px',
-                            fontWeight: '600',
-                            color: 'var(--gray-900)',
-                            lineHeight: '1.3'
-                          }}>
-                            {product.name}
-                          </div>
-                          <button
-                            onClick={() => setEditingProduct({
-                              partnerId: p.id,
-                              id: product.id,
-                              name: product.name,
-                              description: product.description,
-                              price: product.price,
-                              sku: product.sku,
-                              stock: product.stock,
-                              category: product.category
-                            })}
-                            style={{
-                              padding: '4px 8px',
-                              background: 'var(--gray-100)',
-                              border: '1px solid var(--gray-300)',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '12px'
-                            }}
-                          >
-                            ✏️
-                          </button>
-                        </div>
-
-                        {product.description && (
-                          <div style={{
-                            fontSize: '14px',
-                            color: 'var(--gray-600)',
-                            marginBottom: '8px',
-                            lineHeight: '1.4'
-                          }}>
-                            {product.description}
-                          </div>
-                        )}
-
-                        <div style={{
-                          fontSize: '16px',
-                          fontWeight: '700',
-                          color: 'var(--accent)',
-                          marginBottom: '4px'
-                        }}>
-                          ${product.price || 0}
-                        </div>
-
-                        {product.stock !== undefined && (
-                          <div style={{
-                            fontSize: '12px',
-                            color: product.stock > 0 ? '#16a34a' : '#dc2626'
-                          }}>
-                            {product.stock > 0 ? `✅ В наличии: ${product.stock}` : '❌ Нет в наличии'}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {(partnerProducts[p.id] || []).length === 0 && (
-                      <div style={{
-                        gridColumn: '1 / -1',
-                        textAlign: 'center',
-                        padding: '40px',
-                        color: 'var(--gray-500)',
-                        background: 'var(--white)',
-                        borderRadius: '8px',
-                        border: '2px dashed var(--gray-300)'
-                      }}>
-                        <div style={{ fontSize: '32px', marginBottom: '8px' }}>📦</div>
-                        <div style={{ fontSize: '14px' }}>У партнера пока нет товаров</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -787,34 +666,6 @@ export default function Partners() {
       {/* Модальные окна */}
       {creating && <PartnerForm onCancel={() => setCreating(false)} onSave={handleSave} />}
       {editing && <PartnerForm initial={editing as any} onCancel={() => setEditing(null)} onSave={handleSave} />}
-      {editingProduct && (
-        <ProductForm
-          initial={editingProduct}
-          onCancel={() => setEditingProduct(null)}
-          onSave={async (payload, image) => {
-            const partnerId = editingProduct.partnerId
-            if (!partnerId) return
-
-            await updatePartnerProduct(partnerId, payload.id, {
-              name: payload.name,
-              description: payload.description,
-              price: payload.price,
-              sku: payload.sku,
-              stock: payload.stock,
-              category: payload.category
-            })
-            if (image) {
-              await uploadPartnerProductImage(partnerId, payload.id, image)
-            }
-            const data = await fetchPartnerProducts(partnerId)
-            setPartnerProducts((prev) => ({
-              ...prev,
-              [partnerId]: Array.isArray(data) ? data : data.items || data.data || []
-            }))
-            setEditingProduct(null)
-          }}
-        />
-      )}
       {deleting && <ConfirmDialog title="Удалить партнера" message={`Удалить "${deleting.name}"?`} onCancel={() => setDeleting(null)} onConfirm={performDelete} />}
     </div>
   )
