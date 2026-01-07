@@ -1420,7 +1420,7 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
                 )}
               </div>
 
-              {/* Баланс YessCoins */}
+              {/* Баланс Yess!Coins */}
               <div style={{
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 borderRadius: '12px',
@@ -1436,7 +1436,7 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
                   alignItems: 'center',
                   gap: '8px'
                 }}>
-                  💰 Баланс YessCoins
+                  💰 Баланс Yess!Coins
                 </h3>
 
                 {balanceLoading ? (
@@ -1454,7 +1454,7 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
                       animation: 'spin 1s linear infinite',
                       margin: '0 auto 12px auto'
                     }}></div>
-                    Загрузка баланса YessCoins...
+                    Загрузка баланса Yess!Coins...
                   </div>
                 ) : userBalance ? (
                   <div>

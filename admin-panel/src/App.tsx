@@ -1,6 +1,6 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
-import { setAuthToken } from './api/client'
+import { setAuthToken, hasValidTokens } from './api/client'
 import { NotificationProvider } from './contexts/NotificationContext'
 import Notifications from './components/Notifications'
 
@@ -137,14 +137,18 @@ function AppContent() {
 
   // Проверяем токен при каждом изменении маршрута
   useEffect(() => {
-    const token = localStorage.getItem('yessgo_access_token')
-    console.log(`📍 Route changed to ${location.pathname}, token check:`, !!token)
-    if (!token) {
-      console.warn('🔐 Токен отсутствует, перенаправление на вход...')
+    console.log(`📍 Route changed to ${location.pathname}, validating tokens...`)
+    if (!hasValidTokens()) {
+      console.warn('🔐 Invalid or missing tokens, redirecting to login...')
+      // Clear any invalid tokens
+      setAuthToken(null, null)
       window.location.href = '/'
       return
     }
-    setAuthToken(token)
+    const token = localStorage.getItem('yessgo_access_token')
+    if (token) {
+      setAuthToken(token)
+    }
   }, [location.pathname])
 
   return (
@@ -179,14 +183,18 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState<boolean>(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('yessgo_access_token')
-    console.log('🚀 App initialization - token check:', !!token)
-    if (token) {
-      setAuthToken(token)
-      setAuthenticated(true)
-      console.log('✅ User authenticated with existing token')
+    console.log('🚀 App initialization - checking tokens...')
+    if (hasValidTokens()) {
+      const token = localStorage.getItem('yessgo_access_token')
+      if (token) {
+        setAuthToken(token)
+        setAuthenticated(true)
+        console.log('✅ User authenticated with valid tokens')
+      }
     } else {
-      console.log('❌ No token found, user not authenticated')
+      console.log('❌ Invalid or missing tokens, user not authenticated')
+      // Clear any invalid tokens
+      setAuthToken(null, null)
     }
   }, [])
 
@@ -204,7 +212,12 @@ export default function App() {
   return (
     <NotificationProvider>
       <Notifications />
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <AppContent />
       </Router>
     </NotificationProvider>

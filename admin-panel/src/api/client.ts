@@ -12,6 +12,25 @@ const api = axios.create({
   timeout: 15000
 })
 
+// Request interceptor to validate tokens before making calls
+api.interceptors.request.use(
+  config => {
+    // For auth endpoints, don't validate tokens (they handle their own logic)
+    if (config.url?.includes('/auth/')) {
+      return config
+    }
+
+    // Check if we have valid tokens before making the request
+    if (!hasValidTokens()) {
+      console.warn('🚫 Attempting API call without valid tokens, request will likely fail')
+      // Don't block the request, let the response interceptor handle it
+    }
+
+    return config
+  },
+  error => Promise.reject(error)
+)
+
 // Token storage helpers
 const ACCESS_KEY = 'yessgo_access_token'
 const REFRESH_KEY = 'yessgo_refresh_token'
@@ -21,6 +40,69 @@ function getStoredAccessToken(): string | null {
 }
 function getStoredRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_KEY)
+}
+
+// Token validation helper
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    const currentTime = Date.now() / 1000
+    return payload.exp < currentTime
+  } catch (error) {
+    console.warn('Error parsing token:', error)
+    return true // Consider invalid tokens as expired
+  }
+}
+
+// Check if we have valid tokens
+export function hasValidTokens(): boolean {
+  const accessToken = getStoredAccessToken()
+  const refreshToken = getStoredRefreshToken()
+
+  if (!accessToken || !refreshToken) {
+    return false
+  }
+
+  // Check if access token is expired
+  if (isTokenExpired(accessToken)) {
+    console.log('Access token is expired')
+    return false
+  }
+
+  // Check if refresh token is expired (optional, but good practice)
+  if (isTokenExpired(refreshToken)) {
+    console.log('Refresh token is expired')
+    return false
+  }
+
+  return true
+}
+
+// Proactive token refresh - call this before making multiple API calls
+export async function ensureValidTokens(): Promise<boolean> {
+  if (hasValidTokens()) {
+    return true
+  }
+
+  // Check if access token is expired but refresh token is still valid
+  const accessToken = getStoredAccessToken()
+  const refreshToken = getStoredRefreshToken()
+
+  if (refreshToken && !isTokenExpired(refreshToken)) {
+    if (!accessToken || isTokenExpired(accessToken)) {
+      console.log('🔄 Access token expired, attempting proactive refresh...')
+      try {
+        await attemptRefresh()
+        console.log('✅ Proactive token refresh successful')
+        return true
+      } catch (error) {
+        console.error('❌ Proactive token refresh failed:', error)
+        return false
+      }
+    }
+  }
+
+  return false
 }
 
 export function setAuthToken(accessToken: string | null, refreshToken: string | null = null) {
@@ -156,40 +238,69 @@ api.interceptors.response.use(
   async err => {
     const originalRequest = err.config
     if (!originalRequest) return Promise.reject(err)
+
+    // Only handle 401 errors for requests that aren't already retried
     if (err.response && err.response.status === 401 && !originalRequest._retry) {
+      console.log('🚨 401 error detected, attempting token refresh...')
       originalRequest._retry = true
+
+      // Don't attempt refresh for auth endpoints (would cause infinite loop)
+      if (originalRequest.url?.includes('/auth/')) {
+        console.log('🚫 Auth endpoint failed, not attempting refresh')
+        setAuthToken(null, null)
+        window.location.href = '/'
+        return Promise.reject(err)
+      }
+
       if (isRefreshing) {
+        console.log('🔄 Refresh already in progress, queuing request...')
         // queue request
         return new Promise((resolve, reject) => {
           refreshQueue.push({ resolve, reject })
         }).then(token => {
           originalRequest.headers.Authorization = `Bearer ${token}`
           return api(originalRequest)
+        }).catch(queueErr => {
+          console.error('🚨 Queued request failed:', queueErr)
+          return Promise.reject(queueErr)
         })
       }
+
       isRefreshing = true
+      console.log('🔄 Starting token refresh process...')
+
       try {
         const token = await attemptRefresh()
+        console.log('✅ Token refresh successful, retrying original request...')
+
         // flush queue
         refreshQueue.forEach(q => q.resolve(token))
         refreshQueue = []
         isRefreshing = false
+
         originalRequest.headers.Authorization = `Bearer ${token}`
         return api(originalRequest)
-      } catch (refreshErr) {
+      } catch (refreshErr: any) {
+        console.error('❌ Token refresh failed:', refreshErr.message)
+
         refreshQueue.forEach(q => q.reject(refreshErr))
         refreshQueue = []
         isRefreshing = false
-        // clear tokens and redirect to login
-        setAuthToken(null, null)
-        console.warn('🔐 Токен истек, перенаправление на страницу входа...')
-        // Small delay to show error message before redirect
-        setTimeout(() => {
-          window.location.href = '/'
-        }, 1000)
+
+        // Only clear tokens and redirect for non-auth related failures
+        if (refreshErr.response?.status === 401) {
+          console.warn('🔐 Refresh token invalid/expired, clearing tokens and redirecting...')
+          setAuthToken(null, null)
+          // Small delay to show error message before redirect
+          setTimeout(() => {
+            window.location.href = '/'
+          }, 1000)
+        }
+
         return Promise.reject(refreshErr)
       }
     }
+
     return Promise.reject(err)
   }
 )
