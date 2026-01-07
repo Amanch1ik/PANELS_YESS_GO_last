@@ -14,9 +14,25 @@ echo "📋 Настройка admin-panel..."
 if [ -d "admin-panel" ]; then
     cd admin-panel
 
-    # Создаем .env файл
-    echo "VITE_API_BASE=$API_URL" > .env
-    echo "✅ Создан admin-panel/.env"
+    # Создаем полный .env файл для продакшена
+    cat > .env << EOF
+# Production environment variables for YESS!GO Admin Panel
+# Used when running in production
+
+# API Configuration - Direct API calls for production
+VITE_API_BASE=$API_URL
+
+# Alternative API URLs (uncomment if needed):
+# VITE_API_BASE=https://admin.yessgo.org/api/v1
+# VITE_API_BASE=http://localhost:8000/api/v1
+# VITE_API_BASE=https://your-custom-api-domain.com/api/v1
+
+# Optional: Analytics & Monitoring
+# VITE_GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
+# VITE_SENTRY_DSN=https://xxx@sentry.io/xxx
+EOF
+
+    echo "✅ Создан admin-panel/.env с API_URL=$API_URL"
 
     # Проверяем содержимое
     echo "📄 Содержимое .env:"

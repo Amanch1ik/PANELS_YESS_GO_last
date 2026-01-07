@@ -15,17 +15,29 @@
 ssh yesgoadm@srv
 cd /var/www/PANELS_YESS_GO_last/admin-panel
 
-# Создайте .env файл с правильным API URL
+# Создайте .env файл для продакшена
 cat > .env << 'EOF'
-# Production API URL - УКАЖИТЕ ПРАВИЛЬНЫЙ ДОМЕН API
+# Production environment variables for YESS!GO Admin Panel
+# Used when running in production
+
+# API Configuration - Direct API calls for production
 VITE_API_BASE=https://api.yessgo.org/api/v1
 
-# Если API на том же сервере:
+# Alternative API URLs (uncomment if needed):
 # VITE_API_BASE=https://admin.yessgo.org/api/v1
-
-# Если API на другом порту:
 # VITE_API_BASE=http://localhost:8000/api/v1
+# VITE_API_BASE=https://your-custom-api-domain.com/api/v1
+
+# Optional: Analytics & Monitoring
+# VITE_GOOGLE_ANALYTICS_ID=G-XXXXXXXXXX
+# VITE_SENTRY_DSN=https://xxx@sentry.io/xxx
 EOF
+```
+
+### **Проверка настройки:**
+```bash
+# Проверьте созданный файл
+cat .env
 ```
 
 ### **Для web-version-YES-GO:**
