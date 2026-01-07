@@ -285,9 +285,9 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               color: 'var(--gray-700)',
               fontSize: '14px',
               fontWeight: '600',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
+              marginBottom: '6px',
+              textTransform: 'none',
+              letterSpacing: '0'
             }}>
               Имя пользователя
             </label>
@@ -302,7 +302,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '16px 20px 16px 50px',
+                padding: '16px 20px 16px 56px',
                   borderRadius: '12px',
                   border: '1px solid rgba(7, 185, 129, 0.3)',
                   background: 'rgba(7, 185, 129, 0.05)',
@@ -314,9 +314,13 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               />
               <div className="login-icon-user" style={{
                 position: 'absolute',
-                left: '16px',
-                top: '50%',
-                transform: 'translateY(-50%)',
+                left: '12px',
+                top: '0',
+                bottom: '0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
                 color: 'var(--accent)',
                 fontSize: '18px'
               }}>
@@ -331,9 +335,9 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               color: 'var(--gray-700)',
               fontSize: '14px',
               fontWeight: '600',
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
+              marginBottom: '6px',
+              textTransform: 'none',
+              letterSpacing: '0'
             }}>
               Пароль
             </label>
@@ -348,7 +352,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '16px 20px 16px 50px',
+                  padding: '16px 20px 16px 56px',
                   borderRadius: '12px',
                   border: '1px solid rgba(7, 185, 129, 0.3)',
                   background: 'rgba(7, 185, 129, 0.05)',
@@ -368,9 +372,13 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               />
               <div className="login-icon-lock" style={{
                 position: 'absolute',
-                left: '16px',
-                top: '50%',
-                transform: 'translateY(-50%)',
+                left: '12px',
+                top: '0',
+                bottom: '0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
                 color: 'var(--accent)',
                 fontSize: '18px'
               }}>
