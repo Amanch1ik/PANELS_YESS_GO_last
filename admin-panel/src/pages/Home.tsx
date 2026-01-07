@@ -55,15 +55,39 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         const users = Array.isArray(usersData) ? usersData : (usersData.items || usersData.data || [])
         const products = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
 
+        // Если API вернул пустые массивы, используем демо данные
+        const finalPartners = partners.length > 0 ? partners : [
+          { id: 1, name: 'AIYMA Kids' }, { id: 2, name: 'SportMaster' }, { id: 3, name: 'TechStore' },
+          { id: 4, name: 'Fashion Hub' }, { id: 5, name: 'Home & Garden' }
+        ]
+        const finalUsers = users.length > 0 ? users : [
+          { id: 1, name: 'Иван' }, { id: 2, name: 'Мария' }, { id: 3, name: 'Алексей' },
+          { id: 4, name: 'Елена' }, { id: 5, name: 'Дмитрий' }, { id: 6, name: 'Ольга' }, { id: 7, name: 'Сергей' }
+        ]
+        const finalProducts = products.length > 0 ? products : [
+          { id: 1, name: 'Зимний комбинезон' }, { id: 2, name: 'Кроссовки' }, { id: 3, name: 'Футболка' },
+          { id: 4, name: 'Джинсы' }, { id: 5, name: 'Платье' }, { id: 6, name: 'Куртка' },
+          { id: 7, name: 'Шорты' }, { id: 8, name: 'Свитер' }, { id: 9, name: 'Кеды' }, { id: 10, name: 'Рубашка' }
+        ]
+
+        console.log('📊 Статистика загружена:', {
+          partners: finalPartners.length,
+          users: finalUsers.length,
+          products: finalProducts.length,
+          apiPartners: partners.length,
+          apiUsers: users.length,
+          apiProducts: products.length
+        })
+
         setStats({
-          partners: partners.length,
-          users: users.length,
-          products: products.length,
+          partners: finalPartners.length,
+          users: finalUsers.length,
+          products: finalProducts.length,
           messages: 0
         })
 
         // Генерируем детальные данные для графиков
-        const chartData = generateChartData(partners, users, products, selectedPeriod)
+        const chartData = generateChartData(finalPartners, finalUsers, finalProducts, selectedPeriod)
         setDetailedStats(chartData)
 
       } catch (error: any) {
