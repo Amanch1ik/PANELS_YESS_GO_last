@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
 
-type ToastType = 'info' | 'success' | 'error'
+type ToastType = 'info' | 'success' | 'error' | 'warning'
 type Toast = { id: string; title?: string; message?: string; type?: ToastType }
 
 type NotificationContextValue = {

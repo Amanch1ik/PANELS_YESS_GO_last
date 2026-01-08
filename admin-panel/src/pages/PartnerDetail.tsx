@@ -85,6 +85,11 @@ type Partner = {
   description?: string
   createdAt?: string
   imageUrl?: string
+  image?: string
+  logo?: string
+  avatar?: string
+  photo?: string
+  picture?: string
   price?: number
 }
 
@@ -97,6 +102,10 @@ type Product = {
   stock?: number
   category?: string
   imageUrl?: string
+  image?: string
+  photo?: string
+  picture?: string
+  thumbnail?: string
   createdAt?: string
 }
 
@@ -190,11 +199,12 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
 
   const handleSaveProduct = async (payload: any, imageFile?: File) => {
     if (!id) return
+    const partnerId = id // id is guaranteed to be defined here
 
     try {
       if (editingProduct) {
         // Обновление существующего товара
-        await updatePartnerProduct(id, editingProduct.id, {
+        await updatePartnerProduct(partnerId, editingProduct.id, {
           name: payload.name,
           description: payload.description,
           price: payload.price,
@@ -204,7 +214,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         })
 
         if (imageFile) {
-          await uploadPartnerProductImage(id, editingProduct.id, imageFile)
+          await uploadPartnerProductImage(partnerId, editingProduct.id, imageFile)
         }
 
         // Обновляем товар в списке
@@ -216,7 +226,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         setEditingProduct(null)
       } else {
         // Создание нового товара
-        const created = await createPartnerProduct(id, {
+        const created = await createPartnerProduct(partnerId, {
           name: payload.name,
           description: payload.description,
           price: payload.price,
@@ -227,7 +237,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
 
         const newProductId = created?.id
         if (imageFile && newProductId) {
-          await uploadPartnerProductImage(id, newProductId, imageFile)
+          await uploadPartnerProductImage(partnerId, newProductId, imageFile)
         }
 
         // Добавляем новый товар в список

@@ -75,8 +75,7 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/payments/, '/api/v1/admin/payments')
       }
-    },
-    historyApiFallback: true
+    }
   },
   build: {
     // Увеличиваем лимит размера чанка

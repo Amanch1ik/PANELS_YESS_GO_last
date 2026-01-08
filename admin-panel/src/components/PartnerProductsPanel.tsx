@@ -4,7 +4,8 @@ import {
   createPartnerProduct,
   updatePartnerProduct,
   deletePartnerProduct,
-  uploadPartnerProductImage
+  uploadPartnerProductImage,
+  clearPartnerProductsCache
 } from '../api/client'
 import ProductForm from './ProductForm'
 import ConfirmDialog from './ConfirmDialog'
@@ -49,9 +50,27 @@ export default function PartnerProductsPanel({ partnerId, partnerName, onError }
     }
   }
 
+  // Do not auto-load products to avoid mass requests — load on demand
   useEffect(() => {
-    load()
+    // reset products when partnerId changes but don't fetch automatically
+    setProducts([])
+    setError(null)
+    setLoading(false)
   }, [partnerId])
+
+  const handleLoadClick = () => {
+    load()
+  }
+
+  const handleRefreshClick = async () => {
+    try {
+      // clear partner-specific cache and reload
+      clearPartnerProductsCache && clearPartnerProductsCache(partnerId)
+    } catch (e) {
+      console.warn('Не удалось очистить кэш партнёра перед обновлением', e)
+    }
+    await load()
+  }
 
   const handleSave = async (payload: any, imageFile?: File | null) => {
     try {
@@ -115,8 +134,12 @@ export default function PartnerProductsPanel({ partnerId, partnerName, onError }
         <strong style={{ color: 'var(--gray-900)', textShadow: 'none' }}>Партнер {partnerName ?? partnerId}</strong>
         <button className="button" onClick={() => setCreating(true)}>Новый товар</button>
       </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        {(!loading && products.length === 0) && <button className="button" onClick={handleLoadClick}>Загрузить товары</button>}
+        <button className="button" onClick={handleRefreshClick}>Обновить товары</button>
+      </div>
       {creating && (
-        <ProductForm onCancel={() => setCreating(false)} onSave={handleSave} initial={{ partnerId }} />
+        <ProductForm onCancel={() => setCreating(false)} onSave={handleSave} initial={{}} />
       )}
       {editing && (
         <ProductForm

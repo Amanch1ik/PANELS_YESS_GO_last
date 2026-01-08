@@ -173,18 +173,46 @@ const cache = {
   users: { data: null, timestamp: 0 },
   products: { data: null, timestamp: 0 }
 }
+const STORAGE_PREFIX = 'yessgo_cache_v1_'
+// Кэш для товаров партнёров по id
+const partnerProductsCache: Record<string, { data: any; timestamp: number }> = {}
 
 function getCachedData(key: string) {
   const cached = cache[key as keyof typeof cache]
+  // First check in-memory cache
   if (cached.data && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log(`📦 Используем кэшированные данные для ${key}`)
+    console.log(`📦 Используем кэшированные данные (memory) для ${key}`)
     return cached.data
+  }
+  // Try persistent storage
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}${key}`)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && parsed.timestamp && Date.now() - parsed.timestamp < CACHE_DURATION) {
+        console.log(`📦 Используем кэшированные данные (localStorage) для ${key}`)
+        // hydrate memory cache
+        cache[key as keyof typeof cache] = { data: parsed.data, timestamp: parsed.timestamp }
+        return parsed.data
+      } else {
+        // stale - remove
+        localStorage.removeItem(`${STORAGE_PREFIX}${key}`)
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Ошибка чтения кэша из localStorage', e)
   }
   return null
 }
 
 function setCachedData(key: string, data: any) {
-  cache[key as keyof typeof cache] = { data, timestamp: Date.now() }
+  const entry = { data, timestamp: Date.now() }
+  cache[key as keyof typeof cache] = entry
+  try {
+    localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(entry))
+  } catch (e) {
+    console.warn('⚠️ Не удалось записать кэш в localStorage', e)
+  }
 }
 
 export function clearApiCache() {
@@ -192,6 +220,79 @@ export function clearApiCache() {
   cache.partners = { data: null, timestamp: 0 }
   cache.users = { data: null, timestamp: 0 }
   cache.products = { data: null, timestamp: 0 }
+  try {
+    localStorage.removeItem(`${STORAGE_PREFIX}partners`)
+    localStorage.removeItem(`${STORAGE_PREFIX}users`)
+    localStorage.removeItem(`${STORAGE_PREFIX}products`)
+    // remove partner products entries
+    Object.keys(localStorage).forEach(k => {
+      if (k.startsWith(`${STORAGE_PREFIX}partnerProducts-`)) {
+        localStorage.removeItem(k)
+      }
+    })
+  } catch (e) {
+    console.warn('⚠️ Ошибка при очистке persistent cache', e)
+  }
+}
+
+// Helpers to handle 429 Retry-After and schedule background refreshes
+const scheduledRefreshes: Record<string, number | null> = {}
+
+function parseRetryAfter(headerValue: any): number {
+  // Return seconds. Accept formats: "60", "60s", "1m", "120"
+  if (!headerValue) return 60
+  try {
+    const v = String(headerValue).trim().toLowerCase()
+    if (v.endsWith('s')) return Math.max(1, parseInt(v.slice(0, -1), 10) || 60)
+    if (v.endsWith('m')) return Math.max(1, (parseInt(v.slice(0, -1), 10) || 1) * 60)
+    const n = parseInt(v, 10)
+    if (!isNaN(n)) return Math.max(1, n)
+  } catch (e) {
+    // fallthrough
+  }
+  return 60
+}
+
+function scheduleBackgroundFetch(key: string, fn: () => Promise<any>, retryAfterSeconds: number) {
+  try {
+    const ms = Math.min(Math.max(retryAfterSeconds * 1000, 2000), 5 * 60 * 1000) // clamp 2s..5min
+    if (scheduledRefreshes[key]) {
+      // already scheduled
+      return
+    }
+    console.log(`⏱️ Scheduling background refresh for ${key} in ${Math.round(ms / 1000)}s`)
+    const timer = window.setTimeout(async () => {
+      scheduledRefreshes[key] = null
+      try {
+        const res = await fn()
+        if (res) {
+          console.log(`🔁 Background refresh succeeded for ${key}`)
+          setCachedData(key, res)
+        }
+      } catch (e) {
+        console.warn(`🔁 Background refresh failed for ${key}:`, e)
+        // If failed due to 429 again, don't tight-loop — schedule again with exponential backoff
+        const next = Math.min(retryAfterSeconds * 2, 5 * 60)
+        scheduleBackgroundFetch(key, fn, next)
+      }
+    }, ms)
+    scheduledRefreshes[key] = timer
+  } catch (e) {
+    console.warn('Failed to schedule background fetch', e)
+  }
+}
+
+// Global rate-limit marker to avoid repeated calls during server-side throttling window
+let globalRateLimitedUntil = 0
+function setGlobalRateLimit(seconds: number) {
+  try {
+    globalRateLimitedUntil = Date.now() + Math.max(1000, seconds * 1000)
+  } catch (e) {
+    globalRateLimitedUntil = Date.now() + 60000
+  }
+}
+function isGloballyRateLimited() {
+  return Date.now() < globalRateLimitedUntil
 }
 
 export async function fetchPartners(params?: Record<string, any>) {
@@ -199,6 +300,14 @@ export async function fetchPartners(params?: Record<string, any>) {
   const cachedData = getCachedData('partners')
   if (cachedData) {
     return cachedData
+  }
+  // Если уже есть глобальная блокировка по rate-limit, возвращаем кеш или пустой результат
+  if (isGloballyRateLimited()) {
+    console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для partners')
+    // Schedule a background refresh timed to when the limit expires
+    const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+    scheduleBackgroundFetch('partners', () => fetchPartners(params), remaining)
+    return cachedData || []
   }
 
   try {
@@ -220,8 +329,19 @@ export async function fetchPartners(params?: Record<string, any>) {
 
     // Специальная обработка для известных ошибок
     if (status === 429) {
-      console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте обновить страницу через минуту.')
-      throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+      // Если есть кэш — используем его и планируем фоновой рефреш после Retry-After
+      const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+      const retrySeconds = parseRetryAfter(retryAfterHeader)
+      setGlobalRateLimit(retrySeconds)
+      console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
+      if (cachedData) {
+        // Schedule background refresh but return cached immediately
+        scheduleBackgroundFetch('partners', () => fetchPartners(params), retrySeconds)
+        return cachedData
+      }
+      // Нет кэша — безопасно вернуть пустой массив и планировать фоновую попытку
+      scheduleBackgroundFetch('partners', () => fetchPartners(params), retrySeconds)
+      return []
     }
     if (status === 401) {
       console.error('🚫 Необходима авторизация для просмотра партнеров')
@@ -249,6 +369,12 @@ export async function fetchUsers(params?: Record<string, any>) {
   if (cachedData) {
     return cachedData
   }
+  if (isGloballyRateLimited()) {
+    console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для users')
+    const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+    scheduleBackgroundFetch('users', () => fetchUsers(params), remaining)
+    return cachedData || []
+  }
 
   try {
     console.log('📥 Загружаем список пользователей...')
@@ -267,8 +393,16 @@ export async function fetchUsers(params?: Record<string, any>) {
     console.error('❌ Ошибка загрузки пользователей:', status, err?.response?.data)
 
     if (status === 429) {
-      console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте позже.')
-      throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+      const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+      const retrySeconds = parseRetryAfter(retryAfterHeader)
+      setGlobalRateLimit(retrySeconds)
+      console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
+      if (cachedData) {
+        scheduleBackgroundFetch('users', () => fetchUsers(params), retrySeconds)
+        return cachedData
+      }
+      scheduleBackgroundFetch('users', () => fetchUsers(params), retrySeconds)
+      return []
     }
     if (status === 401) {
       console.error('🚫 Необходима авторизация для просмотра пользователей')
@@ -295,6 +429,12 @@ export async function fetchProducts(params?: Record<string, any>) {
   if (cachedData) {
     return cachedData
   }
+  if (isGloballyRateLimited()) {
+    console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для products')
+    const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+    scheduleBackgroundFetch('products', () => fetchProducts(params), remaining)
+    return cachedData || []
+  }
 
   try {
     console.log('📥 Загружаем список продуктов...')
@@ -313,8 +453,16 @@ export async function fetchProducts(params?: Record<string, any>) {
     console.error('❌ Ошибка загрузки продуктов:', status, err?.response?.data)
 
     if (status === 429) {
-      console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте позже.')
-      throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+      const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+      const retrySeconds = parseRetryAfter(retryAfterHeader)
+      setGlobalRateLimit(retrySeconds)
+      console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
+      if (cachedData) {
+        scheduleBackgroundFetch('products', () => fetchProducts(params), retrySeconds)
+        return cachedData
+      }
+      scheduleBackgroundFetch('products', () => fetchProducts(params), retrySeconds)
+      return []
     }
     if (status === 401) {
       console.error('🚫 Необходима авторизация для просмотра продуктов')
@@ -417,7 +565,7 @@ export async function fetchRecentActivities(limit: number = 10, params?: Record<
 
 export async function fetchTransactions(params?: Record<string, any>) {
   // Add parameters to include user data in transactions
-  const enhancedParams = {
+  const enhancedParams: Record<string, any> = {
     ...params,
     // Try different parameter names for including related data
     include: 'user', // Laravel-style
@@ -928,8 +1076,58 @@ export async function uploadProductImage(productId: string | number, file: File)
 }
 
 export async function fetchPartnerProducts(partnerId: string | number) {
-  const resp = await api.get(API_ENDPOINTS.partners.products.list(partnerId))
-  return resp.data
+  const key = String(partnerId)
+  const cached = partnerProductsCache[key]
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log('📦 Используем кэшированные товары партнёра (memory):', partnerId)
+    return cached.data
+  }
+  // Try persistent storage for partner products
+  try {
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}partnerProducts-${key}`)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && parsed.timestamp && Date.now() - parsed.timestamp < CACHE_DURATION) {
+        console.log('📦 Используем кэшированные товары партнёра (localStorage):', partnerId)
+        partnerProductsCache[key] = { data: parsed.data, timestamp: parsed.timestamp }
+        return parsed.data
+      } else {
+        localStorage.removeItem(`${STORAGE_PREFIX}partnerProducts-${key}`)
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ Ошибка чтения кэша товаров партнёра из localStorage', e)
+  }
+
+  try {
+    const resp = await api.get(API_ENDPOINTS.partners.products.list(partnerId))
+    const data = resp.data
+    // Кэшируем, если получили данные
+    if (data) {
+      partnerProductsCache[key] = { data, timestamp: Date.now() }
+      try {
+        localStorage.setItem(`${STORAGE_PREFIX}partnerProducts-${key}`, JSON.stringify({ data, timestamp: Date.now() }))
+      } catch (e) {
+        console.warn('⚠️ Не удалось записать кэш товаров партнёра в localStorage', e)
+      }
+    }
+    return data
+  } catch (err: any) {
+    // При ошибке возвращаем пустой массив (без броска), чтобы UI не падал
+    console.warn(`⚠️ Ошибка загрузки товаров партнёра ${partnerId}:`, err?.response?.status || err.message)
+    return []
+  }
+}
+
+export function clearPartnerProductsCache(partnerId?: string | number) {
+  if (partnerId === undefined) {
+    Object.keys(partnerProductsCache).forEach(k => delete partnerProductsCache[k])
+    console.log('🗑️ Очищен кэш товаров всех партнёров')
+  } else {
+    const key = String(partnerId)
+    delete partnerProductsCache[key]
+    console.log('🗑️ Очищен кэш товаров партнёра:', partnerId)
+  }
 }
 
 export async function createPartnerProduct(partnerId: string | number, payload: Record<string, any>) {

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts, fetchRecentActivities } from '../api/client'
+import React, { useEffect, useState, useRef } from 'react'
+import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts, fetchRecentActivities, clearApiCache } from '../api/client'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -153,6 +153,18 @@ if (typeof document !== 'undefined') {
 }
 
 export default function Home({ onError }: { onError?: (msg: string) => void }) {
+  // Современная цветовая палитра с градиентами для диаграмм
+  const modernColors = [
+    { primary: '#667eea', secondary: '#764ba2' }, // Фиолетовый градиент
+    { primary: '#f093fb', secondary: '#f5576c' }, // Розово-красный градиент
+    { primary: '#4facfe', secondary: '#00f2fe' }, // Синий градиент
+    { primary: '#43e97b', secondary: '#38f9d7' }, // Зеленый градиент
+    { primary: '#fa709a', secondary: '#fee140' }, // Оранжево-розовый градиент
+    { primary: '#a8edea', secondary: '#fed6e3' }, // Мятный градиент
+    { primary: '#ffecd2', secondary: '#fcb69f' }, // Персиковый градиент
+    { primary: '#ff9a9e', secondary: '#fecfef' }, // Красный градиент
+  ]
+
   const [stats, setStats] = useState({
     partners: 0,
     users: 0,
@@ -171,6 +183,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
   const [recentActivities, setRecentActivities] = useState<any[]>([])
   const [recentLoading, setRecentLoading] = useState(false)
   const [recentError, setRecentError] = useState<string | null>(null)
+  const [reloadSignal, setReloadSignal] = useState(0)
 
   // Auto-hide welcome message after 7 seconds with smooth exit animation (longer reading time)
   useEffect(() => {
@@ -190,6 +203,18 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
 
   useEffect(() => {
     const loadStats = async () => {
+      // Защита от двойного вызова при React StrictMode в dev: если недавно уже запускали, пропускаем
+      if (typeof window !== 'undefined') {
+        const KEY = '__yessgo_home_stats_loaded_at'
+        const SKIP_WINDOW = 2000 // ms
+        const last = (window as any)[KEY]
+        if (last && Date.now() - last < SKIP_WINDOW) {
+          console.log('⏭️ Пропускаем дублирующий вызов loadStats (возможно StrictMode)')
+          return
+        }
+        ;(window as any)[KEY] = Date.now()
+      }
+
       try {
         console.log('📊 Loading dashboard statistics...')
 
@@ -267,31 +292,13 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           }, 0)
         }
 
-        // Если товаров нет в основном API, получаем по партнерам
+        // Чтобы избежать множества запросов и зависаний, не запрашиваем товары каждого партнёра при загрузке.
+        // Вместо этого используем оценку на основе количества партнёров и кэш при необходимости.
         if (totalProductsCount === 0 && finalPartners.length > 0) {
-          try {
-            const partnerProductsPromises = finalPartners.map(partner =>
-              fetchPartnerProducts(partner.id).catch(() => [])
-            )
-            const partnerProductsResults = await Promise.all(partnerProductsPromises)
-
-            partnerProductsResults.forEach(partnerProducts => {
-              const products = Array.isArray(partnerProducts) ? partnerProducts : (partnerProducts.items || partnerProducts.data || [])
-              totalProductsCount += products.length
-
-              // Суммируем стоимость всех товаров партнера
-              products.forEach(product => {
-                const price = product.price || product.cost || 0
-                totalRevenue += price
-                totalYessCoins += Math.floor(price * 0.1)
-              })
-            })
-          } catch (error) {
-            console.warn('Не удалось получить товары по партнерам:', error)
-            totalProductsCount = Math.max(1, finalPartners.length * 6)
-            totalRevenue = totalProductsCount * 1200 // Средняя стоимость товаров
-            totalYessCoins = totalProductsCount * 120  // Потенциальные Yess!Coin
-          }
+          console.log('⏱️ Пропускаем детальную загрузку товаров по партнёрам (оптимизация производительности). Используем оценку.')
+          totalProductsCount = Math.max(1, finalPartners.length * 6)
+          totalRevenue = totalProductsCount * 1200
+          totalYessCoins = totalProductsCount * 120
         }
 
         // Финальные проверки
@@ -317,8 +324,8 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           yessCoins: Math.floor(totalYessCoins)
         })
 
-        // Генерируем детальные данные для графиков
-        const chartData = generateChartData(finalPartners, finalUsers, Array(totalProductsCount).fill({}), selectedPeriod)
+        // Генерируем детальные данные для графиков (с кешем)
+        const chartData = getChartData(finalPartners, finalUsers, totalProductsCount, selectedPeriod)
         setDetailedStats(chartData)
 
       } catch (error: any) {
@@ -335,7 +342,23 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
     }
 
     loadStats()
-  }, [onError, selectedPeriod, fromDate, toDate])
+    // reloadSignal included in dependency to allow manual refresh
+  }, [onError, selectedPeriod, fromDate, toDate, reloadSignal])
+
+  // We intentionally do not require `react-window` to avoid build-time import resolution issues.
+  // The recent activities list will use a safe non-virtualized scrollable container.
+  const VirtualListComp = null
+
+  // when reloadSignal changes, effect will re-run due to fromDate/toDate/selectedPeriod dependencies included above
+  // Handler for manual refresh
+  const handleManualRefresh = () => {
+    try {
+      clearApiCache()
+    } catch (e) {
+      console.warn('Не удалось очистить кэш при ручном обновлении', e)
+    }
+    setReloadSignal(s => s + 1)
+  }
 
   const generateChartData = (partners: any[], users: any[], products: any[], period: string) => {
     const days = period === '7d' ? 7 : period === '30d' ? 30 : 90
@@ -351,16 +374,25 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
     }]
 
     // Для категориального графика используем реальные данные из партнеров
-    const categoryMap = new Map<string, number>()
+    // Нормализуем имена категорий (trim + lowercase) чтобы избежать дубликатов
+    const categoryNormalizeMap = new Map<string, { display: string; count: number }>()
     partners.forEach((partner: any) => {
-      const category = partner.category || 'Другое'
-      categoryMap.set(category, (categoryMap.get(category) || 0) + 1)
+      const raw = (partner.category || 'Другое').toString()
+      const normalized = raw.trim().toLowerCase()
+      const display = raw.trim()
+      const existing = categoryNormalizeMap.get(normalized)
+      if (existing) {
+        existing.count += 1
+      } else {
+        categoryNormalizeMap.set(normalized, { display, count: 1 })
+      }
     })
 
-    const categoryData = Array.from(categoryMap.entries()).map(([name, value], index) => ({
-      name,
-      value,
-      color: ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1', '#ff6b6b'][index % 6]
+    const categoryData = Array.from(categoryNormalizeMap.entries()).map(([_, meta], index) => ({
+      name: meta.display,
+      value: meta.count,
+      color: modernColors[index % modernColors.length].primary,
+      gradientId: `category-gradient-${index}`
     }))
 
     // Статус партнеров
@@ -377,6 +409,18 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         { name: 'Неактивные', value: inactivePartners || 0, color: '#ef4444' }
       ]
     }
+  }
+
+  // Простая мемоизация результата генерации данных для графиков — кешируем по ключу
+  const chartCacheRef = useRef<{ key: string | null; data: any | null }>({ key: null, data: null })
+  const getChartData = (partners: any[], users: any[], productsCount: number, period: string) => {
+    const key = `${partners.length}:${users.length}:${productsCount}:${period}`
+    if (chartCacheRef.current.key === key && chartCacheRef.current.data) {
+      return chartCacheRef.current.data
+    }
+    const data = generateChartData(partners, users, Array(productsCount).fill({}), period)
+    chartCacheRef.current = { key, data }
+    return data
   }
 
   const statCards = [
@@ -500,6 +544,9 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
               onChange={(e) => setToDate(e.target.value || null)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--gray-300)' }}
             />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 8 }}>
+            <button className="button" onClick={handleManualRefresh} style={{ padding: '6px 10px' }}>Обновить данные</button>
           </div>
         </div>
       </div>
@@ -662,9 +709,10 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
       {/* Графики */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '2fr 1fr',
-        gap: '24px',
-        marginBottom: '32px'
+        gridTemplateColumns: 'repeat(2, minmax(320px, 1fr))',
+        gap: '20px',
+        marginBottom: '28px',
+        alignItems: 'start'
       }}>
         {/* Линейный график */}
         <div style={{
@@ -673,6 +721,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           padding: '24px',
           border: '1px solid rgba(0, 0, 0, 0.05)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          , minHeight: '240px'
         }}>
           <h3 style={{
             margin: '0 0 20px 0',
@@ -686,25 +735,44 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             📈 Динамика роста
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={detailedStats?.timelineData}>
+            <PieChart>
               <defs>
-                <linearGradient id="partners" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="users" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#82ca9d" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#82ca9d" stopOpacity={0}/>
-                </linearGradient>
+                {[
+                  { id: 'growth-gradient-0', primary: modernColors[0].primary, secondary: modernColors[0].secondary },
+                  { id: 'growth-gradient-1', primary: modernColors[1].primary, secondary: modernColors[1].secondary }
+                ].map(g => (
+                  <radialGradient key={g.id} id={g.id} cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stopColor={g.primary} stopOpacity={1} />
+                    <stop offset="70%" stopColor={g.secondary} stopOpacity={0.9} />
+                    <stop offset="100%" stopColor={g.secondary} stopOpacity={0.7} />
+                  </radialGradient>
+                ))}
               </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Area type="monotone" dataKey="partners" stroke="#8884d8" fillOpacity={1} fill="url(#partners)" name="Партнеры" />
-              <Area type="monotone" dataKey="users" stroke="#82ca9d" fillOpacity={1} fill="url(#users)" name="Пользователи" />
-            </AreaChart>
+              <Pie
+                data={[
+                  { name: 'Партнеры', value: stats.partners || 0, gradientId: 'growth-gradient-0' },
+                  { name: 'Пользователи', value: stats.users || 0, gradientId: 'growth-gradient-1' }
+                ]}
+                cx="50%"
+                cy="55%"
+                innerRadius={34}
+                outerRadius={70}
+                paddingAngle={4}
+                dataKey="value"
+                animationBegin={0}
+                animationDuration={900}
+                animationEasing="ease-out"
+              >
+                {[
+                  { name: 'Партнеры', grad: 'growth-gradient-0' },
+                  { name: 'Пользователи', grad: 'growth-gradient-1' }
+                ].map((entry, idx) => (
+                  <Cell key={`growth-cell-${idx}`} fill={`url(#${entry.grad})`} stroke="var(--white)" strokeWidth={2} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: any, name: any) => [`${value}`, name]} />
+              <Legend wrapperStyle={{ paddingTop: '6px', marginTop: '-14px', fontSize: '13px', fontWeight: '600' }} iconType="circle" />
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
@@ -715,6 +783,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           padding: '24px',
           border: '1px solid rgba(0, 0, 0, 0.05)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          , minHeight: '240px'
         }}>
           <h3 style={{
             margin: '0 0 20px 0',
@@ -729,21 +798,59 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           </h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
+              <defs>
+                {detailedStats?.categoryData.map((entry: any, index: number) => {
+                  const colorSet = modernColors[index % modernColors.length]
+                  return (
+                    <radialGradient key={`gradient-${index}`} id={`category-gradient-${index}`} cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor={colorSet.primary} stopOpacity={1} />
+                      <stop offset="70%" stopColor={colorSet.secondary} stopOpacity={0.9} />
+                      <stop offset="100%" stopColor={colorSet.secondary} stopOpacity={0.7} />
+                    </radialGradient>
+                  )
+                })}
+              </defs>
               <Pie
                 data={detailedStats?.categoryData}
                 cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
+                cy="60%" /* чуть опустили ниже, чтобы пирог точно не обрезался */
+                innerRadius={34}
+                outerRadius={70}
+                paddingAngle={4}
                 dataKey="value"
+                animationBegin={0}
+                animationDuration={1000}
+                animationEasing="ease-out"
               >
                 {detailedStats?.categoryData.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={`url(#${entry.gradientId})`}
+                    stroke="var(--white)"
+                    strokeWidth={2}
+                  />
                 ))}
               </Pie>
-              <Tooltip />
-              <Legend />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--white)',
+                  border: '1px solid rgba(0, 0, 0, 0.1)',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 25px rgba(0, 0, 0, 0.15)',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+                labelStyle={{ color: 'var(--gray-700)', fontWeight: '600' }}
+                formatter={(value: any, name: any) => [`${value} партнеров`, name]}
+              />
+              <Legend
+                wrapperStyle={{
+                  paddingTop: '20px',
+                  fontSize: '14px',
+                  fontWeight: '500'
+                }}
+                iconType="circle"
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -763,6 +870,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           padding: '24px',
           border: '1px solid rgba(0, 0, 0, 0.05)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          , minHeight: '240px'
         }}>
           <h3 style={{
             margin: '0 0 20px 0',
@@ -776,13 +884,42 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             📊 Статус партнеров
           </h3>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={detailedStats?.statusData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#8884d8" />
-            </BarChart>
+            <PieChart>
+              <defs>
+                <radialGradient id="status-gradient-0" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#34d399" stopOpacity={0.9} />
+                </radialGradient>
+                <radialGradient id="status-gradient-1" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#ef4444" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#f97316" stopOpacity={0.9} />
+                </radialGradient>
+              </defs>
+              <Pie
+                data={detailedStats?.statusData ?? [
+                  { name: 'Активные', value: stats.partners || 0, gradientId: 'status-gradient-0' },
+                  { name: 'Неактивные', value: 0, gradientId: 'status-gradient-1' }
+                ]}
+                cx="50%"
+                cy="60%"
+                innerRadius={34}
+                outerRadius={70}
+                dataKey="value"
+                paddingAngle={4}
+                animationBegin={0}
+                animationDuration={800}
+                animationEasing="ease-out"
+              >
+                {(detailedStats?.statusData ?? [
+                  { name: 'Активные', gradientId: 'status-gradient-0' },
+                  { name: 'Неактивные', gradientId: 'status-gradient-1' }
+                ]).map((entry: any, index: number) => (
+                  <Cell key={`status-cell-${index}`} fill={`url(#${entry.gradientId || (index === 0 ? 'status-gradient-0' : 'status-gradient-1')})`} stroke="var(--white)" strokeWidth={2} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: any, name: any) => [`${value}`, name]} />
+              <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '13px', fontWeight: '600' }} iconType="circle" />
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
@@ -793,6 +930,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           padding: '24px',
           border: '1px solid rgba(0, 0, 0, 0.05)',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          , minHeight: '280px'
         }}>
           <h3 style={{
             margin: '0 0 20px 0',
@@ -805,69 +943,104 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           }}>
             🔔 Последние действия
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {recentLoading ? (
+          <div style={{ paddingRight: '6px' }}>
+            {recentLoading && (
               <div style={{ padding: 12, textAlign: 'center', color: 'var(--gray-500)' }}>Загрузка...</div>
-            ) : recentError ? (
+            )}
+            {!recentLoading && recentError && (
               <div style={{ padding: 12, textAlign: 'center', color: '#ef4444' }}>{recentError}</div>
-            ) : (recentActivities.length === 0 ? (
+            )}
+            {!recentLoading && !recentError && recentActivities.length === 0 && (
               <div style={{ padding: 12, textAlign: 'center', color: 'var(--gray-500)' }}>Нет последних действий</div>
-            ) : (
-              recentActivities.slice(0, 10).map((item: any, index: number) => {
-                // Try to infer fields: action/title/message, created_at/date/time, and an optional type to pick an icon
-                const text = item.action || item.title || item.message || item.name || 'Событие'
-                const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
-                const timeDisplay = (() => {
-                  try {
-                    if (!dateVal) return ''
-                    const d = new Date(dateVal)
-                    const diff = Math.floor((Date.now() - d.getTime()) / 1000)
-                    if (diff < 60) return `${diff} сек назад`
-                    if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
-                    if (diff < 86400) return `${Math.floor(diff / 3600)} час(ов) назад`
-                    return `${Math.floor(diff / 86400)} дн назад`
-                  } catch (e) {
-                    return String(dateVal)
-                  }
-                })()
-                // Pick an icon by type or keywords
-                const type = (item.type || item.event || '').toString().toLowerCase()
-                let icon = '🔔'
-                if (type.includes('partner') || /partner/i.test(text)) icon = '🏪'
-                else if (type.includes('product') || /товар|product/i.test(text)) icon = '📦'
-                else if (type.includes('user') || /пользователь|user|register/i.test(text)) icon = '👤'
-                else if (type.includes('delete') || /удален|delete/i.test(text)) icon = '🗑️'
-                else if (type.includes('status') || /статус/i.test(text)) icon = '⚙️'
+            )}
 
-                return (
-                  <div key={index} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '12px',
-                    background: 'var(--gray-50)',
-                    borderRadius: '8px'
-                  }}>
-                    <span style={{ fontSize: '20px' }}>{icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{
-                        fontSize: '14px',
-                        fontWeight: '500',
-                        color: 'var(--gray-900)'
-                      }}>
-                        {text}
+            {!recentLoading && !recentError && recentActivities.length > 0 && (
+              VirtualListComp ? (
+                <VirtualListComp
+                  height={260}
+                  itemCount={recentActivities.length}
+                  itemSize={72}
+                  width={'100%'}
+                >
+                  {({ index, style }: { index: number; style: any }) => {
+                    const item = recentActivities[index]
+                    const text = item.action || item.title || item.message || item.name || 'Событие'
+                    const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
+                    const timeDisplay = (() => {
+                      try {
+                        if (!dateVal) return ''
+                        const d = new Date(dateVal)
+                        const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+                        if (diff < 60) return `${diff} сек назад`
+                        if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
+                        if (diff < 86400) return `${Math.floor(diff / 3600)} час(ов) назад`
+                        return `${Math.floor(diff / 86400)} дн назад`
+                      } catch (e) {
+                        return String(dateVal)
+                      }
+                    })()
+                    const type = (item.type || item.event || '').toString().toLowerCase()
+                    let icon = '🔔'
+                    if (type.includes('partner') || /partner/i.test(text)) icon = '🏪'
+                    else if (type.includes('product') || /товар|product/i.test(text)) icon = '📦'
+                    else if (type.includes('user') || /пользователь|user|register/i.test(text)) icon = '👤'
+                    else if (type.includes('delete') || /удален|delete/i.test(text)) icon = '🗑️'
+                    else if (type.includes('status') || /статус/i.test(text)) icon = '⚙️'
+
+                    return (
+                      <div key={index} style={{ ...style, display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--gray-50)', borderRadius: '8px', boxSizing: 'border-box' }}>
+                        <span style={{ fontSize: '20px' }}>{icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-900)' }}>
+                            {text}
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--gray-500)' }}>
+                            {timeDisplay}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{
-                        fontSize: '12px',
-                        color: 'var(--gray-500)'
-                      }}>
-                        {timeDisplay}
+                    )
+                  }}
+                </VirtualListComp>
+              ) : (
+                <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {recentActivities.map((item: any, index: number) => {
+                    const text = item.action || item.title || item.message || item.name || 'Событие'
+                    const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
+                    const timeDisplay = (() => {
+                      try {
+                        if (!dateVal) return ''
+                        const d = new Date(dateVal)
+                        const diff = Math.floor((Date.now() - d.getTime()) / 1000)
+                        if (diff < 60) return `${diff} сек назад`
+                        if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`
+                        if (diff < 86400) return `${Math.floor(diff / 3600)} час(ов) назад`
+                        return `${Math.floor(diff / 86400)} дн назад`
+                      } catch (e) {
+                        return String(dateVal)
+                      }
+                    })()
+                    const type = (item.type || item.event || '').toString().toLowerCase()
+                    let icon = '🔔'
+                    if (type.includes('partner') || /partner/i.test(text)) icon = '🏪'
+                    else if (type.includes('product') || /товар|product/i.test(text)) icon = '📦'
+                    else if (type.includes('user') || /пользователь|user|register/i.test(text)) icon = '👤'
+                    else if (type.includes('delete') || /удален|delete/i.test(text)) icon = '🗑️'
+                    else if (type.includes('status') || /статус/i.test(text)) icon = '⚙️'
+
+                    return (
+                      <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--gray-50)', borderRadius: '8px' }}>
+                        <span style={{ fontSize: '20px' }}>{icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-900)' }}>{text}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--gray-500)' }}>{timeDisplay}</div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )
-              })
-            ))}
+                    )
+                  })}
+                </div>
+              )
+            )}
           </div>
         </div>
       </div>
