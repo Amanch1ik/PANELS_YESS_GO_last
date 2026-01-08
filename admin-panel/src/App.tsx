@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { setAuthToken, hasValidTokens } from './api/client'
 import { NotificationProvider } from './contexts/NotificationContext'
 import Notifications from './components/Notifications'
@@ -13,6 +13,7 @@ const Messages = lazy(() => import('./pages/Messages'))
 const Users = lazy(() => import('./pages/Users'))
 const Products = lazy(() => import('./pages/Products'))
 const Transactions = lazy(() => import('./pages/Transactions'))
+const TransactionsSettings = lazy(() => import('./pages/TransactionsSettings'))
 const RBACPage = lazy(() => import('./pages/RBAC'))
 const AuditLogs = lazy(() => import('./pages/AuditLogs'))
 
@@ -45,16 +46,10 @@ const LoadingSpinner = () => (
 
 // Компонент навигации
 function Navigation() {
-  const [currentPath, setCurrentPath] = useState(window.location.pathname)
+  const location = useLocation()
+  const currentPath = location.pathname
 
   useEffect(() => {
-    const handleLocationChange = () => {
-      setCurrentPath(window.location.pathname)
-    }
-
-    window.addEventListener('popstate', handleLocationChange)
-    return () => window.removeEventListener('popstate', handleLocationChange)
-
     // Preload критически важных компонентов
     if ('requestIdleCallback' in window) {
       requestIdleCallback(() => {
@@ -65,7 +60,7 @@ function Navigation() {
     }
   }, [])
 
-  const isActive = (path: string) => currentPath === path
+  const isActive = (path: string) => currentPath === path || (path === '/home' && currentPath === '/')
 
   return (
     <header style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--white)', boxShadow: 'var(--shadow-md)', borderRadius: '16px', marginBottom: '32px', border: '1px solid var(--gray-200)' }}>
@@ -105,6 +100,15 @@ function Navigation() {
             color: isActive('/transactions') ? 'var(--white)' : 'var(--gray-700)',
             border: isActive('/transactions') ? 'none' : '1px solid var(--gray-300)'
           }}>Транзакции</button>
+        </Link>
+        <Link to="/transactions/settings" style={{ textDecoration: 'none' }}>
+          <button className="button" style={{
+            background: isActive('/transactions/settings') ? 'var(--accent)' : 'var(--gray-100)',
+            color: isActive('/transactions/settings') ? 'var(--white)' : 'var(--gray-700)',
+            border: isActive('/transactions/settings') ? 'none' : '1px solid var(--gray-300)',
+            fontSize: '12px',
+            padding: '8px 12px'
+          }}>⚙️</button>
         </Link>
         <Link to="/messages" style={{ textDecoration: 'none' }}>
           <button className="button" style={{
@@ -185,6 +189,7 @@ function AppContent() {
           <Route path="/partners/:id" element={<PartnerDetail onError={onError} />} />
           <Route path="/products" element={<Products onError={onError} />} />
           <Route path="/transactions" element={<Transactions onError={onError} />} />
+          <Route path="/transactions/settings" element={<TransactionsSettings />} />
           <Route path="/messages" element={<Messages onError={onError} />} />
           <Route path="/users" element={<Users onError={onError} />} />
           <Route path="/rbac" element={<RBACPage />} />

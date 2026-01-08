@@ -14,7 +14,7 @@ function RBACInner() {
   const roles: Array<'admin'|'editor'|'viewer'> = ['admin','editor','viewer']
   return (
     <div className="container">
-      <h2 style={{ color: 'var(--gray-900)', textShadow: 'none', marginBottom: '24px' }}>Права доступа (Демо)</h2>
+      <h2 style={{ color: 'var(--gray-900)', textShadow: 'none', marginBottom: '24px' }}>Права доступа</h2>
       <div className="card" style={{ maxWidth: 680 }}>
         <div style={{ marginBottom: 12 }}>
           <label style={{ color: 'var(--accent-light)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Текущая роль:</label>

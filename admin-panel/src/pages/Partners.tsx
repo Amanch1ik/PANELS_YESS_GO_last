@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchPartners, createPartner, updatePartner, deletePartner, uploadPartnerImage,
-  fetchPartnerProducts, createPartnerProduct, deletePartnerProduct, uploadPartnerProductImage, updatePartnerProduct } from '../api/client'
+  fetchPartnerProducts, createPartnerProduct, deletePartnerProduct, uploadPartnerProductImage, updatePartnerProduct, testPartnerAPI, clearApiCache } from '../api/client'
 import ProductForm from '../components/ProductForm'
 import PartnerProductsPanel from '../components/PartnerProductsPanel'
-import PartnerForm from '../components/PartnerForm'
+import PartnerForm from '../components/PartnerForm2'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 // CSS анимации
@@ -68,6 +68,8 @@ export default function Partners() {
   const [editing, setEditing] = useState<Partner | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Partner | null>(null)
+  const [testingAPI, setTestingAPI] = useState(false)
+  const [clearingCache, setClearingCache] = useState(false)
   const navigate = useNavigate()
 
 
@@ -168,7 +170,7 @@ export default function Partners() {
         }))
       } else {
         // Create a new partner
-        const created = await createPartner({ name: payload.name, description: payload.description })
+        const created = await createPartner(payload)
         const newId = created?.id || created?.data?.id
         if (imageFile && newId) {
           await uploadPartnerImage(newId, imageFile)
@@ -179,6 +181,39 @@ export default function Partners() {
     }
     } catch (err: any) {
       throw err
+    }
+  }
+
+  const handleTestAPI = async () => {
+    setTestingAPI(true)
+    setError(null)
+    try {
+      console.log('🧪 Начинаем тестирование API эндпоинтов...')
+      await testPartnerAPI()
+      alert('Тестирование API завершено. Проверьте консоль разработчика (F12) для результатов.')
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err.message || 'Ошибка тестирования API'
+      setError(msg)
+      console.error('❌ Ошибка тестирования API:', err)
+      alert(`Ошибка тестирования API: ${msg}`)
+    } finally {
+      setTestingAPI(false)
+    }
+  }
+
+  const handleClearCache = async () => {
+    setClearingCache(true)
+    try {
+      clearApiCache()
+      await load() // Перезагружаем данные
+      alert('Кэш очищен! Данные обновлены с сервера.')
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err.message || 'Ошибка очистки кэша'
+      setError(msg)
+      console.error('❌ Ошибка очистки кэша:', err)
+      alert(`Ошибка очистки кэша: ${msg}`)
+    } finally {
+      setClearingCache(false)
     }
   }
 
@@ -248,6 +283,74 @@ export default function Partners() {
           }}
         >
           ➕ Новый партнер
+        </button>
+
+        <button
+          onClick={handleTestAPI}
+          disabled={testingAPI}
+          style={{
+            padding: '12px 20px',
+            background: testingAPI ? 'var(--gray-400)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+            color: 'var(--white)',
+            border: 'none',
+            borderRadius: '12px',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: testingAPI ? 'not-allowed' : 'pointer',
+            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            marginLeft: '12px'
+          }}
+          onMouseEnter={(e) => {
+            if (!testingAPI) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(99, 102, 241, 0.4)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!testingAPI) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)'
+            }
+          }}
+        >
+          {testingAPI ? '🔄 Тестируем...' : '🧪 Тест API'}
+        </button>
+
+        <button
+          onClick={handleClearCache}
+          disabled={clearingCache}
+          style={{
+            padding: '12px 20px',
+            background: clearingCache ? 'var(--gray-400)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            color: 'var(--white)',
+            border: 'none',
+            borderRadius: '12px',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: clearingCache ? 'not-allowed' : 'pointer',
+            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            marginLeft: '12px'
+          }}
+          onMouseEnter={(e) => {
+            if (!clearingCache) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!clearingCache) {
+              e.currentTarget.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)'
+            }
+          }}
+        >
+          {clearingCache ? '🔄 Очищаем...' : '🗑️ Очистить кэш'}
         </button>
       </div>
 

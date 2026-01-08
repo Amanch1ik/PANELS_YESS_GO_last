@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5175,
+    host: '127.0.0.1',
     proxy: {
       '/auth': {
         target: 'https://api.yessgo.org',
@@ -27,7 +28,8 @@ export default defineConfig({
           if (path.match(/^\/partners\/\d+\/products/)) {
             return path.replace(/^\/partners/, '/api/v1/partners');
           }
-          // For other partner operations, use admin endpoint
+          // For other partner operations, try different API paths
+          // First try admin endpoint, if it fails we can try others
           return path.replace(/^\/partners/, '/api/v1/admin/partners');
         }
       },
@@ -60,8 +62,21 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/partner/, '/api/v1/partner')
+      },
+      '/transactions': {
+        target: 'https://api.yessgo.org',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/transactions/, '/api/v1/admin/transactions')
+      },
+      '/payments': {
+        target: 'https://api.yessgo.org',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/payments/, '/api/v1/admin/payments')
       }
-    }
+    },
+    historyApiFallback: true
   },
   build: {
     // Увеличиваем лимит размера чанка

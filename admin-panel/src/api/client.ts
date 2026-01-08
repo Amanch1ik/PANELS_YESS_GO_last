@@ -23,6 +23,12 @@ api.interceptors.request.use(
       return config
     }
 
+    // Add access token to request headers if available
+    const accessToken = getStoredAccessToken()
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+
     // Check if we have valid tokens before making the request
     if (!hasValidTokens()) {
       console.warn('🚫 Attempting API call without valid tokens, request will likely fail')
@@ -160,9 +166,76 @@ export async function login(username: string, password: string) {
   }
 }
 
+// Кэш для данных API
+const CACHE_DURATION = 5 * 60 * 1000 // 5 минут
+const cache = {
+  partners: { data: null, timestamp: 0 },
+  users: { data: null, timestamp: 0 },
+  products: { data: null, timestamp: 0 }
+}
+
+function getCachedData(key: string) {
+  const cached = cache[key as keyof typeof cache]
+  if (cached.data && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`📦 Используем кэшированные данные для ${key}`)
+    return cached.data
+  }
+  return null
+}
+
+function setCachedData(key: string, data: any) {
+  cache[key as keyof typeof cache] = { data, timestamp: Date.now() }
+}
+
+export function clearApiCache() {
+  console.log('🗑️ Очищаем кэш API')
+  cache.partners = { data: null, timestamp: 0 }
+  cache.users = { data: null, timestamp: 0 }
+  cache.products = { data: null, timestamp: 0 }
+}
+
 export async function fetchPartners(params?: Record<string, any>) {
-  const resp = await api.get(API_ENDPOINTS.partners.list, { params })
-  return resp.data
+  // Проверяем кэш
+  const cachedData = getCachedData('partners')
+  if (cachedData) {
+    return cachedData
+  }
+
+  try {
+    console.log('📥 Загружаем список партнеров...')
+    const resp = await api.get(API_ENDPOINTS.partners.list, { params })
+
+    // Проверяем, что ответ содержит данные
+    if (resp.data && typeof resp.data === 'object') {
+      console.log(`✅ Загружено партнеров:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+      setCachedData('partners', resp.data)
+      return resp.data
+    } else {
+      console.warn('⚠️ API вернул неожиданный формат данных:', resp.data)
+      return []
+    }
+  } catch (err: any) {
+    const status = err?.response?.status
+    console.error('❌ Ошибка загрузки партнеров:', status, err?.response?.data)
+
+    // Специальная обработка для известных ошибок
+    if (status === 429) {
+      console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте обновить страницу через минуту.')
+      throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+    }
+    if (status === 401) {
+      console.error('🚫 Необходима авторизация для просмотра партнеров')
+      throw new Error('Необходима авторизация')
+    }
+    if (status === 403) {
+      console.error('🚫 Недостаточно прав для просмотра партнеров')
+      throw new Error('Недостаточно прав доступа')
+    }
+
+    // Для других ошибок возвращаем пустой массив вместо краша
+    console.warn('⚠️ Возвращаем пустой список партнеров из-за ошибки API')
+    return []
+  }
 }
 
 export async function fetchMessages() {
@@ -171,13 +244,153 @@ export async function fetchMessages() {
 }
 
 export async function fetchUsers(params?: Record<string, any>) {
-  const resp = await api.get(API_ENDPOINTS.users.list, { params })
+  // Проверяем кэш
+  const cachedData = getCachedData('users')
+  if (cachedData) {
+    return cachedData
+  }
+
+  try {
+    console.log('📥 Загружаем список пользователей...')
+    const resp = await api.get(API_ENDPOINTS.users.list, { params })
+
+    if (resp.data && typeof resp.data === 'object') {
+      console.log(`✅ Загружено пользователей:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+      setCachedData('users', resp.data)
+      return resp.data
+    } else {
+      console.warn('⚠️ API вернул неожиданный формат данных для пользователей:', resp.data)
+      return []
+    }
+  } catch (err: any) {
+    const status = err?.response?.status
+    console.error('❌ Ошибка загрузки пользователей:', status, err?.response?.data)
+
+    if (status === 429) {
+      console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте позже.')
+      throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+    }
+    if (status === 401) {
+      console.error('🚫 Необходима авторизация для просмотра пользователей')
+      throw new Error('Необходима авторизация')
+    }
+    if (status === 403) {
+      console.error('🚫 Недостаточно прав для просмотра пользователей')
+      throw new Error('Недостаточно прав доступа')
+    }
+
+    console.warn('⚠️ Возвращаем пустой список пользователей из-за ошибки API')
+    return []
+  }
+}
+
+export async function getUser(id: string | number) {
+  const resp = await api.get(`${API_ENDPOINTS.users.list}/${id}`)
   return resp.data
 }
 
 export async function fetchProducts(params?: Record<string, any>) {
-  const resp = await api.get(API_ENDPOINTS.products.list, { params })
-  return resp.data
+  // Проверяем кэш
+  const cachedData = getCachedData('products')
+  if (cachedData) {
+    return cachedData
+  }
+
+  try {
+    console.log('📥 Загружаем список продуктов...')
+    const resp = await api.get(API_ENDPOINTS.products.list, { params })
+
+    if (resp.data && typeof resp.data === 'object') {
+      console.log(`✅ Загружено продуктов:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+      setCachedData('products', resp.data)
+      return resp.data
+    } else {
+      console.warn('⚠️ API вернул неожиданный формат данных для продуктов:', resp.data)
+      return []
+    }
+  } catch (err: any) {
+    const status = err?.response?.status
+    console.error('❌ Ошибка загрузки продуктов:', status, err?.response?.data)
+
+    if (status === 429) {
+      console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте позже.')
+      throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+    }
+    if (status === 401) {
+      console.error('🚫 Необходима авторизация для просмотра продуктов')
+      throw new Error('Необходима авторизация')
+    }
+    if (status === 403) {
+      console.error('🚫 Недостаточно прав для просмотра продуктов')
+      throw new Error('Недостаточно прав доступа')
+    }
+
+    console.warn('⚠️ Возвращаем пустой список продуктов из-за ошибки API')
+    return []
+  }
+}
+
+export async function fetchAuditLogs(params?: Record<string, any>) {
+  try {
+    console.log('📥 Загружаем логи аудита...')
+
+    // Пробуем разные эндпоинты для логов аудита
+    const endpoints = [
+      '/audit/logs',
+      '/admin/audit-logs',
+      '/audit-logs',
+      '/logs/audit',
+      '/admin/logs'
+    ]
+
+    let lastError = null
+
+    for (const endpoint of endpoints) {
+      try {
+        const resp = await api.get(endpoint, { params })
+
+        if (resp.data && typeof resp.data === 'object') {
+          console.log(`✅ Загружены логи аудита с ${endpoint}:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+          return resp.data
+        }
+      } catch (err: any) {
+        lastError = err
+        const status = err?.response?.status
+
+        if (status === 404 || status === 405) {
+          console.log(`🔄 Эндпоинт ${endpoint} не найден, пробуем следующий...`)
+          continue
+        }
+
+        if (status === 429) {
+          console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте позже.')
+          throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+        }
+
+        throw err
+      }
+    }
+
+    // Если ни один эндпоинт не сработал
+    console.warn('⚠️ Не удалось загрузить логи аудита, возвращаем пустой массив')
+    return []
+
+  } catch (err: any) {
+    const status = err?.response?.status
+    console.error('❌ Ошибка загрузки логов аудита:', status, err?.response?.data)
+
+    if (status === 401) {
+      console.error('🚫 Необходима авторизация для просмотра логов аудита')
+      throw new Error('Необходима авторизация')
+    }
+    if (status === 403) {
+      console.error('🚫 Недостаточно прав для просмотра логов аудита')
+      throw new Error('Недостаточно прав доступа')
+    }
+
+    console.warn('⚠️ Возвращаем пустой список логов аудита из-за ошибки API')
+    return []
+  }
 }
 
 // Fetch recent activities/events - try common endpoints in order
@@ -203,10 +416,64 @@ export async function fetchRecentActivities(limit: number = 10, params?: Record<
 }
 
 export async function fetchTransactions(params?: Record<string, any>) {
+  // Add parameters to include user data in transactions
+  const enhancedParams = {
+    ...params,
+    // Try different parameter names for including related data
+    include: 'user', // Laravel-style
+    with: 'user', // Some APIs
+    expand: 'user', // OData-style
+    populate: 'user', // Strapi-style
+    relations: 'user', // Generic
+  }
+
+  // Add multiple date parameter variations to improve compatibility
+  if (params?.from || params?.date_from || params?.start_date || params?.created_at_from || params?.created_from) {
+    const fromDate = params.from || params.date_from || params.start_date || params.created_at_from || params.created_from
+    enhancedParams.from = fromDate
+    enhancedParams.date_from = fromDate
+    enhancedParams.start_date = fromDate
+    enhancedParams.created_at_from = fromDate
+    enhancedParams.created_from = fromDate
+    enhancedParams.date_start = fromDate
+    enhancedParams.startDate = fromDate
+
+    // Add timestamp versions if the date looks like a date string
+    if (typeof fromDate === 'string' && fromDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const fromDateTime = new Date(fromDate + 'T00:00:00.000Z')
+      const fromISOString = fromDateTime.toISOString()
+      enhancedParams.from_timestamp = fromISOString
+      enhancedParams.start_timestamp = fromISOString
+      enhancedParams.created_at_gte = fromISOString
+      enhancedParams.date_gte = fromDate
+    }
+  }
+
+  if (params?.to || params?.date_to || params?.end_date || params?.created_at_to || params?.created_to) {
+    const toDate = params.to || params.date_to || params.end_date || params.created_at_to || params.created_to
+    enhancedParams.to = toDate
+    enhancedParams.date_to = toDate
+    enhancedParams.end_date = toDate
+    enhancedParams.created_at_to = toDate
+    enhancedParams.created_to = toDate
+    enhancedParams.date_end = toDate
+    enhancedParams.endDate = toDate
+
+    // Add timestamp versions if the date looks like a date string
+    if (typeof toDate === 'string' && toDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const toDateTime = new Date(toDate + 'T23:59:59.999Z')
+      const toISOString = toDateTime.toISOString()
+      enhancedParams.to_timestamp = toISOString
+      enhancedParams.end_timestamp = toISOString
+      enhancedParams.created_at_lte = toISOString
+      enhancedParams.date_lte = toDate
+    }
+  }
+
   const endpoints = ['/transactions', '/admin/transactions', '/payments', '/admin/payments']
   for (const ep of endpoints) {
     try {
-      const resp = await api.get(ep, { params })
+      const resp = await api.get(ep, { params: enhancedParams })
       if (resp.status === 200 && resp.data) {
         return resp.data
       }
@@ -243,7 +510,8 @@ export async function refundTransaction(id: string | number) {
       throw err
     }
   }
-  throw new Error('Refund endpoint not available')
+  // Return special object indicating operation is not supported
+  return { error: 'not_supported', message: 'Операция возврата не поддерживается API' }
 }
 
 export async function disputeTransaction(id: string | number) {
@@ -257,7 +525,8 @@ export async function disputeTransaction(id: string | number) {
       throw err
     }
   }
-  throw new Error('Dispute endpoint not available')
+  // Return special object indicating operation is not supported
+  return { error: 'not_supported', message: 'Операция спора не поддерживается API' }
 }
 
 export async function bulkTransactionsAction(ids: Array<string | number>, action: string) {
@@ -415,10 +684,218 @@ export async function getPartner(id: string | number) {
   return resp.data
 }
 
+// Временная функция для тестирования API эндпоинтов
+export async function testPartnerAPI() {
+  const endpoints = [
+    '/admin/partners',
+    '/partners',
+    '/api/admin/partners',
+    '/partner/auth/register',
+    '/partner/register',
+    '/auth/register',
+    '/register'
+  ]
+
+  console.log('🧪 Тестируем доступные эндпоинты для партнеров...')
+
+  for (const ep of endpoints) {
+    try {
+      console.log(`🔍 Проверяем GET ${ep}...`)
+
+      // Добавляем задержку между запросами чтобы избежать 429 ошибки
+      if (ep === '/partners') {
+        console.log('⏳ Ждем 2 секунды перед запросом к /partners...')
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+
+      const resp = await api.get(ep)
+
+      // Проверяем, является ли ответ JSON или HTML
+      const isJson = resp.headers['content-type']?.includes('application/json')
+      const isHtml = resp.data?.includes?.('<!doctype html>')
+
+      if (isHtml) {
+        console.log(`⚠️ GET ${ep} возвращает HTML страницу (не API):`, resp.status)
+      } else if (isJson) {
+        console.log(`✅ GET ${ep} возвращает JSON API:`, resp.status, resp.data)
+      } else {
+        console.log(`✅ GET ${ep} доступен:`, resp.status, resp.data)
+      }
+    } catch (err: any) {
+      const status = err?.response?.status
+      console.log(`❌ GET ${ep} недоступен:`, status || 'ошибка сети')
+
+      // Специальная обработка для известных ошибок
+      if (status === 429) {
+        console.log(`🚫 ${ep}: Слишком много запросов. Попробуйте позже.`)
+      } else if (status === 405) {
+        console.log(`🚫 ${ep}: Метод GET не разрешен (только POST)`)
+      } else if (status === 404) {
+        console.log(`🚫 ${ep}: Эндпоинт не найден`)
+      }
+    }
+
+    // Задержка между запросами
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
+  console.log('🏁 Тестирование завершено!')
+}
+
 export async function createPartner(payload: Record<string, any>) {
-  // Use partner registration endpoint instead of admin endpoint
-  const resp = await api.post('/partner/auth/register', payload)
-  return resp.data
+  console.log('🚀 Начинаем создание партнера с данными:', payload)
+
+  // Пробуем разные эндпоинты для создания партнеров
+  const endpoints = [
+    '/admin/partners',           // Админ эндпоинт
+    '/partners',                 // Основной эндпоинт
+    '/api/admin/partners',       // Полный API путь
+    '/partner/create',           // Специальный эндпоинт создания
+    '/partners/create',          // Альтернативный путь
+    '/api/partners',             // API v1
+    '/v1/partners',              // API v1 с версией
+    '/partner',                  // Простой путь для создания
+    '/partner/new',              // Новый партнер
+    '/partners/new',             // Новый партнер
+    '/partner/add',              // Добавить партнера
+    '/partners/add',             // Добавить партнера
+    '/admin/partner',            // Админ партнер
+    '/admin/partner/create',     // Админ создание
+    '/api/v1/partners',          // API v1 полная версия
+    '/api/partner',              // API партнер
+    '/api/partner/create',       // API создание партнера
+    // Дополнительные варианты
+    '/partner/store',            // Store метод (Laravel-style)
+    '/partners/store',           // Store метод
+    '/partner/save',             // Save метод
+    '/partners/save',            // Save метод
+    '/admin/partners/store',     // Админ store
+    '/api/admin/partners/create', // API админ create
+    '/api/v1/admin/partners',    // API v1 админ
+    '/admin/api/partners',       // Админ API
+    '/partner/api/create',       // Partner API create
+    '/partner/management/create', // Management create
+    '/business/partners',        // Business partners
+    '/business/partner/create',  // Business partner create
+  ]
+
+  // Проверяем, что payload содержит необходимые поля
+  const requiredFields = ['name', 'category', 'phone', 'password']
+  const missingFields = requiredFields.filter(field => !payload[field])
+
+  if (missingFields.length > 0) {
+    throw new Error(`Отсутствуют обязательные поля: ${missingFields.join(', ')}`)
+  }
+
+  // Убеждаемся, что у нас есть email
+  if (!payload.email) {
+    payload.email = `${payload.name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')}@yessgo.com`
+    console.log(`📧 Автоматически сгенерирован email: ${payload.email}`)
+  }
+
+  // Добавляем задержку перед первым запросом
+  console.log('⏳ Ждем 1 секунду перед созданием партнера...')
+  await new Promise(resolve => setTimeout(resolve, 1000))
+
+  let lastError = null
+
+  for (const endpoint of endpoints) {
+    // Пробуем сначала POST, затем PUT для каждого эндпоинта
+    const methods = ['post', 'put']
+
+    for (const method of methods) {
+      try {
+        console.log(`📡 Пробуем ${method.toUpperCase()} запрос на ${endpoint}...`)
+        console.log(`📤 Данные для отправки:`, payload)
+
+        const resp = await api[method](endpoint, payload)
+        console.log(`📥 Ответ от ${endpoint} (${method.toUpperCase()}):`, resp.status, resp.data)
+
+        if (resp.status >= 200 && resp.status < 300) {
+          console.log(`✅ Партнер успешно создан на ${endpoint} методом ${method.toUpperCase()}!`)
+          return resp.data
+        }
+      } catch (err: any) {
+        const status = err?.response?.status
+        const errorData = err?.response?.data
+
+        console.warn(`❌ Ошибка ${method.toUpperCase()} на ${endpoint}:`, status)
+        console.warn(`📄 Данные ошибки:`, errorData)
+
+        // Продолжаем пробовать другие методы/эндпоинты для 404 и 405 ошибок
+        if (status === 404 || status === 405) {
+          if (method === 'post') {
+            console.log(`🔄 Метод POST не сработал, пробуем PUT на ${endpoint}...`)
+            continue // пробуем следующий метод
+          } else {
+            console.log(`🔄 Эндпоинт ${endpoint} не поддерживает ни POST ни PUT, пробуем следующий эндпоинт...`)
+            break // переходим к следующему эндпоинту
+          }
+        }
+
+        // Для других ошибок (400, 422) - пробуем следующий метод/эндпоинт
+        if (status === 400 || status === 422) {
+          if (method === 'post') {
+            console.log(`🔄 POST вернул ${status}, пробуем PUT на ${endpoint}...`)
+            continue
+          } else {
+            console.log(`🔄 PUT тоже вернул ${status}, пробуем следующий эндпоинт...`)
+            break
+          }
+        }
+
+        // Критические ошибки - прекращаем
+        if (status === 401) {
+          throw new Error('Необходима авторизация для создания партнера')
+        }
+        if (status === 403) {
+          throw new Error('Недостаточно прав для создания партнера')
+        }
+        if (status === 429) {
+          console.error('🚫 API временно недоступен (слишком много запросов). Попробуйте через минуту.')
+          throw new Error('API временно недоступен из-за слишком частых запросов. Попробуйте позже.')
+        }
+
+        // Для других ошибок - продолжаем с следующим методом
+        console.log(`🔄 Продолжаем с следующим методом после ошибки ${status}...`)
+        continue
+      }
+    }
+
+    // Небольшая задержка между эндпоинтами
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+
+  // Если ни один эндпоинт не сработал, попробуем прямой запрос к API
+  console.log('🔄 Все локальные эндпоинты не сработали, пробуем прямые запросы к API...')
+
+  try {
+    console.log('🌐 Пробуем прямой POST на https://api.yessgo.org/api/v1/admin/partners')
+    const directResponse = await fetch('https://api.yessgo.org/api/v1/admin/partners', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('accessToken') || ''}`
+      },
+      body: JSON.stringify(payload)
+    })
+
+    console.log(`📥 Прямой ответ: ${directResponse.status}`)
+
+    if (directResponse.ok) {
+      const data = await directResponse.json()
+      console.log('✅ Прямой запрос к API удался!')
+      return data
+    } else {
+      const errorText = await directResponse.text()
+      console.error('❌ Прямой запрос тоже не удался:', directResponse.status, errorText)
+    }
+  } catch (directErr) {
+    console.error('❌ Ошибка при прямом запросе к API:', directErr)
+  }
+
+  console.error('❌ Все эндпоинты для создания партнера вернули ошибки, включая прямые запросы')
+  throw new Error('Не удалось создать партнера. Проверьте подключение к API и доступные эндпоинты.')
 }
 
 export async function updatePartner(id: string | number, payload: Record<string, any>) {

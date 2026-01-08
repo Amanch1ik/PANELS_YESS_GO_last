@@ -339,38 +339,42 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
 
   const generateChartData = (partners: any[], users: any[], products: any[], period: string) => {
     const days = period === '7d' ? 7 : period === '30d' ? 30 : 90
-    const data: any[] = []
 
-    for (let i = days - 1; i >= 0; i--) {
-      const date = subDays(new Date(), i)
-      const dateStr = format(date, 'yyyy-MM-dd')
+    // Показываем текущие данные без исторических симуляций
+    const currentDate = new Date()
+    const data: any[] = [{
+      date: format(currentDate, 'dd.MM'),
+      partners: partners.length,
+      users: users.length,
+      products: products.length,
+      revenue: 0 // Пока нет данных о выручке
+    }]
 
-      // Симулируем данные (в реальности нужно получать из API)
-      const basePartners = Math.floor(partners.length * 0.1)
-      const baseUsers = Math.floor(users.length * 0.05)
-      const baseProducts = Math.floor(products.length * 0.03)
+    // Для категориального графика используем реальные данные из партнеров
+    const categoryMap = new Map<string, number>()
+    partners.forEach((partner: any) => {
+      const category = partner.category || 'Другое'
+      categoryMap.set(category, (categoryMap.get(category) || 0) + 1)
+    })
 
-      data.push({
-        date: format(date, 'dd.MM'),
-        partners: Math.floor(basePartners + Math.random() * basePartners * 0.5),
-        users: Math.floor(baseUsers + Math.random() * baseUsers * 0.5),
-        products: Math.floor(baseProducts + Math.random() * baseProducts * 0.5),
-        revenue: Math.floor(10000 + Math.random() * 50000)
-      })
-    }
+    const categoryData = Array.from(categoryMap.entries()).map(([name, value], index) => ({
+      name,
+      value,
+      color: ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1', '#ff6b6b'][index % 6]
+    }))
+
+    // Статус партнеров
+    const activePartners = partners.filter((p: any) => p.is_active !== false).length
+    const inactivePartners = partners.filter((p: any) => p.is_active === false).length
 
     return {
       timelineData: data,
-      categoryData: [
-        { name: 'Электроника', value: 35, color: '#8884d8' },
-        { name: 'Одежда', value: 25, color: '#82ca9d' },
-        { name: 'Бытовая техника', value: 20, color: '#ffc658' },
-        { name: 'Спорттовары', value: 12, color: '#ff7300' },
-        { name: 'Другое', value: 8, color: '#8dd1e1' }
+      categoryData: categoryData.length > 0 ? categoryData : [
+        { name: 'Нет данных', value: 1, color: '#cccccc' }
       ],
       statusData: [
-        { name: 'Активные', value: partners.filter((p: any) => p.is_active !== false).length, color: '#10b981' },
-        { name: 'Неактивные', value: partners.filter((p: any) => p.is_active === false).length, color: '#ef4444' }
+        { name: 'Активные', value: activePartners || 0, color: '#10b981' },
+        { name: 'Неактивные', value: inactivePartners || 0, color: '#ef4444' }
       ]
     }
   }
