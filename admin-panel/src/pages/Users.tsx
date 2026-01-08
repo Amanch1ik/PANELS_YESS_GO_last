@@ -1410,9 +1410,15 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
                           fontSize: '14px'
                         }}>
                           <strong>Регистрация:</strong><br />
-                          {selectedUser.created_at || selectedUser.createdAt
-                            ? new Date(selectedUser.created_at || selectedUser.createdAt).toLocaleString('ru-RU')
-                            : 'Неизвестно'}
+                          {(() => {
+                            const dateValue = selectedUser.created_at || selectedUser.createdAt;
+                            if (!dateValue) return 'Неизвестно';
+                            try {
+                              return new Date(dateValue).toLocaleString('ru-RU');
+                            } catch {
+                              return 'Неизвестно';
+                            }
+                          })()}
                         </div>
                       </div>
                     </div>

@@ -185,7 +185,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<Home onError={onError} />} />
-          <Route path="/partners" element={<Partners onError={onError} />} />
+          <Route path="/partners" element={<Partners />} />
           <Route path="/partners/:id" element={<PartnerDetail onError={onError} />} />
           <Route path="/products" element={<Products onError={onError} />} />
           <Route path="/transactions" element={<Transactions onError={onError} />} />

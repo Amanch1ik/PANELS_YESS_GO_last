@@ -30,7 +30,7 @@ export default function ProductForm({ initial, onCancel, onSave }: {
     setError(null)
     setSaving(true)
     try {
-      await onSave({ id: initial?.id, name, description, price, sku, stock, category, partnerId: (initial as any)?.partnerId }, imageFile)
+      await onSave({ id: initial?.id, name, description, price, sku, stock, category }, imageFile)
     } catch (err: any) {
       setError(err?.message || 'Ошибка сохранения')
     } finally {

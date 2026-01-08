@@ -57,8 +57,15 @@ type Partner = {
   name: string
   description?: string
   createdAt?: string
- imageUrl?: string
- price?: number
+  imageUrl?: string
+  image?: string
+  logo?: string
+  avatar?: string
+  photo?: string
+  picture?: string
+  is_active?: boolean
+  is_verified?: boolean
+  price?: number
 }
 
 export default function Partners() {
@@ -113,64 +120,39 @@ export default function Partners() {
     }
   }
 
-  // editingProduct state removed duplicate; using existing declaration above
   const handleSave = async (payload: any, imageFile?: File | null) => {
     try {
       if (payload.id) {
-        const id = payload.id
-        // Update partner's product if editing
-        if (payload?.partnerId && payload?.id) {
-          await updatePartnerProduct(payload.partnerId, payload.id, {
-            name: payload.name,
-            description: payload.description,
-            price: payload.price,
-            sku: payload.sku,
-            stock: payload.stock,
-            category: payload.category
-          })
-          if (imageFile) {
-            await uploadPartnerProductImage(payload.partnerId, payload.id, imageFile)
-          }
-          // refresh list for this partner
-          const data = await fetchPartnerProducts(payload.partnerId)
-          if (Array.isArray(data)) {
-            setPartnerProducts((prev) => ({ ...prev, [payload.partnerId]: data }))
-          } else {
-            setPartnerProducts((prev) => ({ ...prev, [payload.partnerId]: data.items || data.data || [] }))
-          }
-        } else {
-          // existing partner/product path (fallback)
-          await updatePartner(id, { name: payload.name, description: payload.description })
-          if (imageFile) {
-            await uploadPartnerImage(id, imageFile)
-          }
-        }
-        setEditingProduct(null)
-        await load()
-    } else {
-      if (payload.partnerId) {
-        // Create a product under the partner
-        const prodPayload = {
+        // Update existing partner
+        await updatePartner(payload.id, {
           name: payload.name,
           description: payload.description,
-          price: payload.price,
-          sku: payload.sku,
-          stock: payload.stock,
-          category: payload.category
+          category: payload.category,
+          phone: payload.phone,
+          email: payload.email,
+          address: payload.address,
+          website: payload.website,
+          two_gis_url: payload.two_gis_url,
+          max_discount_percent: payload.max_discount_percent,
+          cashback_rate: payload.cashback_rate
+        })
+        if (imageFile) {
+          await uploadPartnerImage(payload.id, imageFile)
         }
-        const created = await createPartnerProduct(payload.partnerId, prodPayload)
-        const newId = created?.id || created?.data?.id
-        if (imageFile && newId) {
-          await uploadPartnerProductImage(payload.partnerId, newId, imageFile)
-        }
-        const data = await fetchPartnerProducts(payload.partnerId)
-        setPartnerProducts((prev) => ({
-          ...prev,
-          [payload.partnerId]: Array.isArray(data) ? data : data.items || data.data || []
-        }))
       } else {
-        // Create a new partner
-        const created = await createPartner(payload)
+        // Create new partner
+        const created = await createPartner({
+          name: payload.name,
+          description: payload.description,
+          category: payload.category,
+          phone: payload.phone,
+          email: payload.email,
+          address: payload.address,
+          website: payload.website,
+          two_gis_url: payload.two_gis_url,
+          max_discount_percent: payload.max_discount_percent,
+          cashback_rate: payload.cashback_rate
+        })
         const newId = created?.id || created?.data?.id
         if (imageFile && newId) {
           await uploadPartnerImage(newId, imageFile)
@@ -178,7 +160,7 @@ export default function Partners() {
       }
       await load()
       setCreating(false)
-    }
+      setEditing(null)
     } catch (err: any) {
       throw err
     }

@@ -54,7 +54,7 @@ export default function ExportProgressModal({ isOpen, onClose, data, onComplete 
 
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 8 }}>
-            Обработка {current} из {total} записей...
+            Обработка {current} из {data.length} записей...
           </div>
 
           <div style={{

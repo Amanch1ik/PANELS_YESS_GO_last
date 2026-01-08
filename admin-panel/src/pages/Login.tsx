@@ -447,14 +447,14 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               gap: '8px'
             }}
             onMouseEnter={(e) => {
-              if (!loading) {
+              if (!loading && e.target instanceof HTMLElement) {
                 e.target.style.background = 'var(--gradient-secondary)';
                 e.target.style.transform = 'translateY(-2px)';
                 e.target.style.boxShadow = '0 12px 30px rgba(3, 83, 58, 0.6)';
               }
             }}
             onMouseLeave={(e) => {
-              if (!loading) {
+              if (!loading && e.target instanceof HTMLElement) {
                 e.target.style.background = 'var(--gradient-primary)';
                 e.target.style.transform = 'translateY(0)';
                 e.target.style.boxShadow = '0 8px 20px rgba(3, 83, 58, 0.4)';

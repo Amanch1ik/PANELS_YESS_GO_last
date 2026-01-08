@@ -512,7 +512,7 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
                 </thead>
                 <tbody>
                   {transactions.map((t: Transaction) => (
-                    <tr key={String(t.id)} style={{ borderBottom: '1px solid var(--gray-100)', ':hover': { background: 'var(--gray-50)' } }}>
+                    <tr key={String(t.id)} style={{ borderBottom: '1px solid var(--gray-100)' }}>
                       <td style={{ padding: '12px 8px', fontFamily: 'monospace', fontSize: '14px' }}>
                         {t.id}
                       </td>
