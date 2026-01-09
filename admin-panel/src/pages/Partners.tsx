@@ -6,6 +6,8 @@ import ProductForm from '../components/ProductForm'
 import PartnerProductsPanel from '../components/PartnerProductsPanel'
 import PartnerForm from '../components/PartnerForm2'
 import ConfirmDialog from '../components/ConfirmDialog'
+import PartnerAvatar from '../components/PartnerAvatar'
+import { resolveAssetUrl } from '../utils/assets'
 
 // CSS анимации
 const styles = `
@@ -42,6 +44,40 @@ const styles = `
   .product-card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
+  }
+ 
+  /* Partner logo UI consistent with web-version */
+  .partner-avatar-wrapper {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .partner-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 12px;
+  }
+  .partner-logo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+  .partner-logo-text {
+    font-size: 26px;
+    font-weight: 700;
+    color: #07b981;
   }
 `
 
@@ -86,7 +122,13 @@ export default function Partners() {
       setError(null)
       const data = await fetchPartners()
       const list = Array.isArray(data) ? data : (data.items || data.data || [])
-      setPartners(list)
+      // normalize partners using service logic
+      try {
+        const { normalizePartner } = await import('../services/normalize')
+        setPartners(list.map((p: any) => normalizePartner(p)))
+      } catch {
+        setPartners(list)
+      }
     } finally {
       setLoading(false)
     }
@@ -95,6 +137,57 @@ export default function Partners() {
   useEffect(() => {
     load()
   }, [])
+
+  // Robust partner image extractor — supports strings, arrays and nested objects
+  const getPartnerImage = (partnerData: any): string | null => {
+    if (!partnerData) return null
+    const tryExtract = (val: any): string | null => {
+      if (val === undefined || val === null) return null
+      if (typeof val === 'string') return val
+      if (Array.isArray(val) && val.length > 0) return tryExtract(val[0])
+      if (typeof val === 'object') {
+        if (typeof val.url === 'string' && val.url) return val.url
+        if (typeof val.path === 'string' && val.path) return val.path
+        if (typeof val.src === 'string' && val.src) return val.src
+        if (typeof val.file === 'string' && val.file) return val.file
+        if (val.data && (val.data.url || (val.data.attributes && val.data.attributes.url))) {
+          return val.data.url || val.data.attributes.url
+        }
+        if (val.attributes && (val.attributes.url || val.attributes.path)) {
+          return val.attributes.url || val.attributes.path
+        }
+      }
+      return null
+    }
+
+    const fieldNames = ['logoUrl','LogoUrl','Logo','logo','coverImageUrl','CoverImageUrl','cover','Cover','imageUrl','ImageUrl','image','Image','photo','Photo','picture','Picture','thumbnail','Thumbnail','media','Media','file','File','url','Url','images','Images','photos','Photos']
+    const candidates: any[] = []
+    for (const name of fieldNames) {
+      if (partnerData && Object.prototype.hasOwnProperty.call(partnerData, name)) candidates.push((partnerData as any)[name])
+      const foundKey = partnerData && Object.keys(partnerData).find(k => k.toLowerCase() === name.toLowerCase())
+      if (foundKey) candidates.push((partnerData as any)[foundKey])
+    }
+
+    for (const c of candidates) {
+      const found = tryExtract(c)
+      if (found) {
+        const resolved = resolveAssetUrl(found)
+        if (resolved) return resolved
+        return found
+      }
+    }
+
+    if (Array.isArray(partnerData.images) && partnerData.images.length > 0) {
+      const found = tryExtract(partnerData.images[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+    if (Array.isArray(partnerData.photos) && partnerData.photos.length > 0) {
+      const found = tryExtract(partnerData.photos[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+
+    return null
+  }
 
 
   const handleCreate = () => {
@@ -170,7 +263,6 @@ export default function Partners() {
     setTestingAPI(true)
     setError(null)
     try {
-      console.log('🧪 Начинаем тестирование API эндпоинтов...')
       await testPartnerAPI()
       alert('Тестирование API завершено. Проверьте консоль разработчика (F12) для результатов.')
     } catch (err: any) {
@@ -398,62 +490,7 @@ export default function Partners() {
                   boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
                   border: '2px solid var(--white)'
                 }}>
-                  {(() => {
-                    // Проверяем различные возможные поля для картинки
-                    const imageSrc = p.imageUrl || p.image || p.logo || p.avatar || p.photo
-                    const hasImage = imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== ''
-
-                    if (hasImage) {
-                      return (
-                        <img
-                          src={imageSrc}
-                          alt={p.name}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block'
-                          }}
-                          onError={(e) => {
-                            // Если картинка не загружается, показываем иконку
-                            const target = e.currentTarget.parentElement
-                            if (target) {
-                              target.innerHTML = '<div style="width: 100%; height: 100%; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; color: var(--white); font-size: 24px; font-weight: 700;">🏪</div>'
-                            }
-                          }}
-                        />
-                      )
-                    } else {
-                      // Генерируем иконку на основе названия партнера
-                      const getPartnerIcon = (name: string) => {
-                        const firstLetter = name.charAt(0).toUpperCase()
-                        const icons: { [key: string]: string } = {
-                          'A': '🏪', 'B': '🏬', 'C': '🏭', 'D': '🏪', 'E': '🏬',
-                          'F': '🏭', 'G': '🏪', 'H': '🏬', 'I': '🏭', 'J': '🏪',
-                          'K': '🏬', 'L': '🏭', 'M': '🏪', 'N': '🏬', 'O': '🏭',
-                          'P': '🏪', 'Q': '🏬', 'R': '🏭', 'S': '🏪', 'T': '🏬',
-                          'U': '🏭', 'V': '🏪', 'W': '🏬', 'X': '🏭', 'Y': '🏪', 'Z': '🏬'
-                        }
-                        return icons[firstLetter] || '🏪'
-                      }
-
-                      return (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          background: 'var(--gradient-primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--white)',
-                          fontSize: '24px',
-                          fontWeight: '700'
-                        }}>
-                          {getPartnerIcon(p.name)}
-                        </div>
-                      )
-                    }
-                  })()}
+                  <PartnerAvatar partner={p} size={56} innerCircle={48} />
                 </div>
 
                 <div style={{ flex: 1 }}>

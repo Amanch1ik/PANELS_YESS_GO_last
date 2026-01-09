@@ -1,8 +1,26 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import compressPlugin from 'vite-plugin-compression'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // generate gz and brotli static files during build for nginx to serve
+    compressPlugin({
+      verbose: false,
+      disable: false,
+      threshold: 10240,
+      algorithm: 'brotliCompress',
+      ext: '.br'
+    }),
+    compressPlugin({
+      verbose: false,
+      disable: false,
+      threshold: 10240,
+      algorithm: 'gzip',
+      ext: '.gz'
+    })
+  ],
   server: {
     port: 5175,
     host: '127.0.0.1',
@@ -78,8 +96,8 @@ export default defineConfig({
     }
   },
   build: {
-    // Увеличиваем лимит размера чанка
-    chunkSizeWarningLimit: 1000,
+    // Increase chunk size warning to reduce noise during builds
+    chunkSizeWarningLimit: 2000,
     // Code splitting
     rollupOptions: {
       output: {
@@ -93,23 +111,28 @@ export default defineConfig({
         }
       }
     },
-    // Оптимизации для production
+    // Production optimizations
     minify: 'terser',
     terserOptions: {
       compress: {
         drop_console: true,
         drop_debugger: true,
         pure_funcs: ['console.log', 'console.info', 'console.debug']
+      },
+      format: {
+        comments: false
       }
     },
-    // Source maps для production (опционально)
+    // Disable sourcemaps in production to reduce bundle size
     sourcemap: false,
     // CSS код-сплиттинг
     cssCodeSplit: true,
     // Оптимизация изображений
     assetsInlineLimit: 4096,
     // Настройки для chunks
-    reportCompressedSize: false
+    reportCompressedSize: false,
+    // Ensure stable output names for caching
+    manifest: true
   },
   // Оптимизации зависимостей
   optimizeDeps: {

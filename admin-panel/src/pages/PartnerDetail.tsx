@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { fetchPartners, fetchPartnerProducts, createPartnerProduct, updatePartnerProduct, deletePartnerProduct, uploadPartnerProductImage } from '../api/client'
 import ProductForm from '../components/ProductForm'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { resolveAssetUrl } from '../utils/assets'
+import { normalizePartner } from '../services/normalize'
+import PartnerAvatar from '../components/PartnerAvatar'
 
 // CSS анимации
 const styles = `
@@ -70,6 +73,66 @@ const styles = `
     color: var(--accent);
     cursor: pointer;
   }
+  /* Partner logo / avatar styling (match web-version) */
+  .partner-logo {
+    border-radius: 50%;
+    overflow: hidden;
+    border: none;
+    box-shadow: none;
+    width: 80px;
+    height: 80px;
+    min-width: 80px;
+    min-height: 80px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+  .partner-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .partner-logo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+    color: var(--white);
+    font-size: 32px;
+    font-weight: 700;
+  }
+  /* Avatar box with inner circular image to match web-version look */
+  .partner-avatar-box {
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    background: var(--white);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .partner-avatar-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+  }
+  .partner-avatar-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+  }
 `
 
 // Создаем элемент style
@@ -113,6 +176,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [partner, setPartner] = useState<Partner | null>(null)
+  const [logoLoaded, setLogoLoaded] = useState<boolean | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -142,30 +206,31 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         setError('Партнер не найден')
         return
       }
+      // normalize partner to ensure logoUrl/coverUrl are available
+      let normalizedPartner = currentPartner
+      try {
+        normalizedPartner = normalizePartner(currentPartner)
+      } catch {
+        // fallback to raw partner if normalization fails
+        normalizedPartner = currentPartner
+      }
 
-      console.log('📦 Загружен партнер:', currentPartner)
-      console.log('🖼️ Поля партнера:', Object.keys(currentPartner))
-      console.log('🖼️ Картинка партнера:', currentPartner.imageUrl || currentPartner.image || currentPartner.logo)
-
-      setPartner(currentPartner)
+      setPartner(normalizedPartner)
 
       // Загружаем товары партнера
       try {
-        const productsData = await fetchPartnerProducts(id)
+        const productsData = await fetchPartnerProducts(id as string)
         const productsList = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
-        console.log('📦 Загружены товары партнера:', productsList)
-        if (productsList.length > 0) {
-          console.log('🖼️ Первый товар:', productsList[0])
-          console.log('🖼️ Поля товара:', Object.keys(productsList[0]))
-          console.log('🖼️ Картинка товара:', productsList[0].imageUrl || productsList[0].image)
-          console.log('📊 Stock значения товаров:', productsList.map(p => ({ name: p.name, stock: p.stock })))
 
-          // Подсчет товаров по наличию
-          const inStock = productsList.filter(p => p.stock !== undefined && p.stock !== null && p.stock > 0).length
-          const outOfStock = productsList.filter(p => p.stock === undefined || p.stock === null || p.stock <= 0).length
-          console.log('📊 Статистика наличия:', { inStock, outOfStock, total: productsList.length })
+        // normalize products
+        try {
+          const { normalizeProduct } = await import('../services/normalize')
+          const normalized = productsList.map((pr: any) => normalizeProduct(pr))
+          setProducts(normalized)
+        } catch {
+          setProducts(productsList)
         }
-        setProducts(productsList)
+        // setProducts handled in normalization block above
       } catch (productsError) {
         console.warn('Ошибка загрузки товаров партнера:', productsError)
         setProducts([])
@@ -197,7 +262,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     }
   }
 
-  const handleSaveProduct = async (payload: any, imageFile?: File) => {
+  const handleSaveProduct = async (payload: any, imageFile?: File | null) => {
     if (!id) return
     const partnerId = id // id is guaranteed to be defined here
 
@@ -255,7 +320,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     }
   }
 
-  const getPartnerImage = (partnerData: Partner) => {
+  const getPartnerImage = (partnerData: any) => {
     // Проверяем различные возможные поля с картинками
     let imageSrc = partnerData.imageUrl || partnerData.image || partnerData.logo ||
                    partnerData.avatar || partnerData.photo || partnerData.picture
@@ -311,6 +376,64 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     // check boolean/flag fields commonly used by APIs
     if ((p as any).available === true || (p as any).is_available === true || (p as any).in_stock === true) return true
     return false
+  }
+
+  // Robust product image extractor — supports strings, arrays, and common nested objects
+  const getProductImage = (prod: any): string | null => {
+    if (!prod) return null
+
+    const tryExtract = (val: any): string | null => {
+      if (val === undefined || val === null) return null
+      if (typeof val === 'string') return val
+      if (Array.isArray(val) && val.length > 0) return tryExtract(val[0])
+      if (typeof val === 'object') {
+        // Common fields
+        if (typeof val.url === 'string' && val.url) return val.url
+        if (typeof val.path === 'string' && val.path) return val.path
+        if (typeof val.src === 'string' && val.src) return val.src
+        if (typeof val.file === 'string' && val.file) return val.file
+        // Strapi-like payloads
+        if (val.data && (val.data.url || (val.data.attributes && val.data.attributes.url))) {
+          return val.data.url || val.data.attributes.url
+        }
+        if (val.attributes && (val.attributes.url || val.attributes.path)) {
+          return val.attributes.url || val.attributes.path
+        }
+      }
+      return null
+    }
+
+    // try to resolve fields case-insensitively (API may return PascalCase like ImageUrl)
+    const fieldNames = ['imageUrl', 'image', 'photo', 'picture', 'thumbnail', 'media', 'file', 'image_path', 'url', 'Images', 'Photos']
+    const candidates: any[] = []
+    for (const name of fieldNames) {
+      // direct lookup
+      if (prod && Object.prototype.hasOwnProperty.call(prod, name)) candidates.push((prod as any)[name])
+      // case-insensitive search
+      const foundKey = prod && Object.keys(prod).find(k => k.toLowerCase() === name.toLowerCase())
+      if (foundKey) candidates.push((prod as any)[foundKey])
+    }
+
+    for (const c of candidates) {
+      const found = tryExtract(c)
+      if (found) {
+        const resolved = resolveAssetUrl(found)
+        if (resolved) return resolved
+        return found
+      }
+    }
+
+    // Arrays specifically on the product object
+    if (Array.isArray(prod.images) && prod.images.length > 0) {
+      const found = tryExtract(prod.images[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+    if (Array.isArray(prod.photos) && prod.photos.length > 0) {
+      const found = tryExtract(prod.photos[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+
+    return null
   }
 
   if (loading) {
@@ -406,38 +529,14 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
             border: '3px solid var(--white)',
             flexShrink: 0
           }}>
-            {getPartnerImage(partner) ? (
-              <img
-                src={getPartnerImage(partner)!}
-                alt={partner.name}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  display: 'block'
-                }}
-                onError={(e) => {
-                  const target = e.currentTarget.parentElement
-                  if (target) {
-                    target.innerHTML = `<div style="width: 100%; height: 100%; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; color: var(--white); font-size: 32px; font-weight: 700;">${getPartnerIcon(partner.name)}</div>`
-                  }
-                }}
-              />
-            ) : (
-              <div style={{
-                width: '100%',
-                height: '100%',
-                background: 'var(--gradient-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--white)',
-                fontSize: '32px',
-                fontWeight: '700'
-              }}>
-                {getPartnerIcon(partner.name)}
-              </div>
-            )}
+            {(() => {
+              const logoUrl = (partner as any).logoUrl || getPartnerImage(partner)
+              return (
+                <div style={{ width: '100%', height: '100%', position: 'relative' }} className="partner-logo">
+                  <PartnerAvatar partner={partner} size={80} innerCircle={56} />
+                </div>
+              )
+            })()}
           </div>
 
           {/* Информация о партнере */}
@@ -621,10 +720,65 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         </div>
       </div>
 
-      {/* Сетка товаров */}
+      {/* Сетка товаров по категориям */}
       {products.length > 0 ? (
-        <div className="product-grid">
-          {products.map((product) => (
+        <div>
+          {/* Группируем товары по категориям */}
+          {(() => {
+            const productsByCategory = products.reduce((acc, product) => {
+              const category = product.category || 'Без категории'
+              if (!acc[category]) {
+                acc[category] = []
+              }
+              acc[category].push(product)
+              return acc
+            }, {} as Record<string, typeof products>)
+
+            return Object.entries(productsByCategory).map(([category, categoryProducts]) => (
+              <div key={category} style={{ marginBottom: '40px' }}>
+                {/* Заголовок категории */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '20px',
+                  padding: '12px 16px',
+                  background: 'linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--gray-200)'
+                }}>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: '20px',
+                    fontWeight: '700',
+                    color: 'var(--gray-900)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{
+                      background: 'var(--primary)',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      fontWeight: '600'
+                    }}>
+                      {category}
+                    </span>
+                  </h3>
+                  <div style={{
+                    fontSize: '14px',
+                    color: 'var(--gray-600)',
+                    fontWeight: '500'
+                  }}>
+                    {categoryProducts.length} товар{categoryProducts.length !== 1 ? 'ов' : ''}
+                  </div>
+                </div>
+
+                {/* Сетка товаров в категории */}
+                <div className="product-grid">
+                  {categoryProducts.map((product) => (
             <div key={String(product.id)} className="product-card-detail">
               {/* Картинка товара */}
               <div style={{
@@ -640,33 +794,23 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                 border: '1px solid var(--gray-200)'
               }}>
                 {(() => {
-                  // Проверяем различные поля с картинками
-                  let imageSrc = product.imageUrl || product.image || product.photo ||
-                                 product.picture || product.thumbnail
-
-                  // Если массив изображений, берем первое
-                  if (Array.isArray(product.images) && product.images.length > 0) {
-                    imageSrc = product.images[0]
-                  }
-                  if (Array.isArray(product.photos) && product.photos.length > 0) {
-                    imageSrc = product.photos[0]
-                  }
-
-                  // Проверяем валидность и добавляем базовый URL если нужно
-                  if (imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== '') {
-                    if (!imageSrc.startsWith('http') && !imageSrc.startsWith('data:')) {
-                      imageSrc = `https://api.yessgo.org${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`
-                    }
-
+                  const imageSrc = getProductImage(product)
+                  if (imageSrc) {
                     return (
                       <img
                         src={imageSrc}
                         alt={product.name}
+                        width={180}
+                        height={180}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover',
-                          display: 'block'
+                          display: 'block',
+                          background: 'var(--gray-100)',
+                          transition: 'transform 200ms ease, opacity 200ms ease'
                         }}
                         onError={(e) => {
                           console.warn(`❌ Ошибка загрузки картинки товара ${product.id}:`, imageSrc)
@@ -677,9 +821,8 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                         }}
                       />
                     )
-                  } else {
-                    return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
                   }
+                  return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
                 })()}
               </div>
 
@@ -834,6 +977,10 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
               </div>
             </div>
           ))}
+                </div>
+              </div>
+            ))
+          })()}
         </div>
       ) : (
         <div style={{

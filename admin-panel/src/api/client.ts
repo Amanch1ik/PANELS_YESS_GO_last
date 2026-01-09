@@ -72,17 +72,15 @@ export function hasValidTokens(): boolean {
     return false
   }
 
-  // Check if access token is expired
-  if (isTokenExpired(accessToken)) {
-    console.log('Access token is expired')
-    return false
-  }
+    // Check if access token is expired
+    if (isTokenExpired(accessToken)) {
+      return false
+    }
 
-  // Check if refresh token is expired (optional, but good practice)
-  if (isTokenExpired(refreshToken)) {
-    console.log('Refresh token is expired')
-    return false
-  }
+    // Check if refresh token is expired (optional, but good practice)
+    if (isTokenExpired(refreshToken)) {
+      return false
+    }
 
   return true
 }
@@ -99,13 +97,10 @@ export async function ensureValidTokens(): Promise<boolean> {
 
   if (refreshToken && !isTokenExpired(refreshToken)) {
     if (!accessToken || isTokenExpired(accessToken)) {
-      console.log('🔄 Access token expired, attempting proactive refresh...')
       try {
         await attemptRefresh()
-        console.log('✅ Proactive token refresh successful')
         return true
       } catch (error) {
-        console.error('❌ Proactive token refresh failed:', error)
         return false
       }
     }

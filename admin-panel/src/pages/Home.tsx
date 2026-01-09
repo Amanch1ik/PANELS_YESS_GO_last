@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts, fetchRecentActivities, clearApiCache } from '../api/client'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -152,7 +152,7 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(style)
 }
 
-export default function Home({ onError }: { onError?: (msg: string) => void }) {
+function Home({ onError }: { onError?: (msg: string) => void }) {
   // Современная цветовая палитра с градиентами для диаграмм
   const modernColors = [
     { primary: '#667eea', secondary: '#764ba2' }, // Фиолетовый градиент
@@ -216,55 +216,49 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
       }
 
       try {
-        console.log('📊 Loading dashboard statistics...')
-
-        // Load data with individual error handling to prevent one failure from blocking others
-        let partnersData: any = []
-        let usersData: any = []
-        let productsData: any = []
-
+        // Загружаем все данные параллельно для максимальной скорости
         const params: Record<string, any> = {}
         if (fromDate) params.from = fromDate
         if (toDate) params.to = toDate
-        try {
-          partnersData = await fetchPartners(params)
-          console.log('✅ Partners data loaded')
-        } catch (error: any) {
-          console.warn('⚠️ Failed to load partners:', error.message)
-          onError?.('Ошибка загрузки партнеров: ' + error.message)
-        }
 
-        try {
-          usersData = await fetchUsers(params)
-          console.log('✅ Users data loaded')
-        } catch (error: any) {
-          console.warn('⚠️ Failed to load users:', error.message)
-          onError?.('Ошибка загрузки пользователей: ' + error.message)
-        }
+        const [partnersResult, usersResult, productsResult] = await Promise.allSettled([
+          fetchPartners(params).catch(error => {
+            console.warn('⚠️ Failed to load partners:', error.message)
+            onError?.('Ошибка загрузки партнеров: ' + error.message)
+            return []
+          }),
+          fetchUsers(params).catch(error => {
+            console.warn('⚠️ Failed to load users:', error.message)
+            onError?.('Ошибка загрузки пользователей: ' + error.message)
+            return []
+          }),
+          fetchProducts(params).catch(error => {
+            console.warn('⚠️ Failed to load products:', error.message)
+            onError?.('Ошибка загрузки продуктов: ' + error.message)
+            return []
+          })
+        ])
 
-        try {
-          productsData = await fetchProducts(params)
-          console.log('✅ Products data loaded')
-        } catch (error: any) {
-          console.warn('⚠️ Failed to load products:', error.message)
-          onError?.('Ошибка загрузки продуктов: ' + error.message)
-        }
+        const partnersData = partnersResult.status === 'fulfilled' ? partnersResult.value : []
+        const usersData = usersResult.status === 'fulfilled' ? usersResult.value : []
+        const productsData = productsResult.status === 'fulfilled' ? productsResult.value : []
 
-        // Load recent activities (non-blocking)
-        try {
-          setRecentLoading(true)
-          const activities = await fetchRecentActivities(10, params)
-          // Normalize array shape: if API returns {items: []} or data directly
-          const list = Array.isArray(activities) ? activities : (activities.items || activities.data || [])
-          setRecentActivities((list || []).slice(0, 10))
-          setRecentError(null)
-        } catch (actErr: any) {
-          console.warn('⚠️ Failed to load recent activities:', actErr?.message || actErr)
-          setRecentActivities([])
-          setRecentError(actErr?.message || 'Ошибка загрузки последних действий')
-        } finally {
-          setRecentLoading(false)
-        }
+        // 🚀 ОПТИМИЗАЦИЯ: Load recent activities асинхронно (не блокирует основной интерфейс)
+        setTimeout(async () => {
+          try {
+            setRecentLoading(true)
+            const activities = await fetchRecentActivities(10, params)
+            // Normalize array shape: if API returns {items: []} or data directly
+            const list = Array.isArray(activities) ? activities : (activities.items || activities.data || [])
+            setRecentActivities((list || []).slice(0, 10))
+            setRecentError(null)
+          } catch (actErr: any) {
+            setRecentActivities([])
+            setRecentError(null)
+          } finally {
+            setRecentLoading(false)
+          }
+        }, 100) // Небольшая задержка чтобы основной интерфейс загрузился быстрее
 
         const partners = Array.isArray(partnersData) ? partnersData : (partnersData.items || partnersData.data || [])
         const users = Array.isArray(usersData) ? usersData : (usersData.items || usersData.data || [])
@@ -295,7 +289,6 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         // Чтобы избежать множества запросов и зависаний, не запрашиваем товары каждого партнёра при загрузке.
         // Вместо этого используем оценку на основе количества партнёров и кэш при необходимости.
         if (totalProductsCount === 0 && finalPartners.length > 0) {
-          console.log('⏱️ Пропускаем детальную загрузку товаров по партнёрам (оптимизация производительности). Используем оценку.')
           totalProductsCount = Math.max(1, finalPartners.length * 6)
           totalRevenue = totalProductsCount * 1200
           totalYessCoins = totalProductsCount * 120
@@ -306,14 +299,6 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
         if (totalRevenue === 0) totalRevenue = totalProductsCount * 1000
         if (totalYessCoins === 0) totalYessCoins = totalProductsCount * 100
 
-        console.log('📊 Статистика загружена:', {
-          partners: finalPartners.length,
-          users: finalUsers.length,
-          products: totalProductsCount,
-          apiPartners: partners.length,
-          apiUsers: users.length,
-          apiProducts: products.length
-        })
 
         setStats({
           partners: finalPartners.length,
@@ -324,7 +309,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           yessCoins: Math.floor(totalYessCoins)
         })
 
-        // Генерируем детальные данные для графиков (с кешем)
+        // Генерируем детальные данные для графиков
         const chartData = getChartData(finalPartners, finalUsers, totalProductsCount, selectedPeriod)
         setDetailedStats(chartData)
 
@@ -342,8 +327,8 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
     }
 
     loadStats()
-    // reloadSignal included in dependency to allow manual refresh
-  }, [onError, selectedPeriod, fromDate, toDate, reloadSignal])
+    // Только reloadSignal для ручного обновления - остальные параметры внутри функции
+  }, [reloadSignal])
 
   // We intentionally do not require `react-window` to avoid build-time import resolution issues.
   // The recent activities list will use a safe non-virtualized scrollable container.
@@ -352,11 +337,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
   // when reloadSignal changes, effect will re-run due to fromDate/toDate/selectedPeriod dependencies included above
   // Handler for manual refresh
   const handleManualRefresh = () => {
-    try {
       clearApiCache()
-    } catch (e) {
-      console.warn('Не удалось очистить кэш при ручном обновлении', e)
-    }
     setReloadSignal(s => s + 1)
   }
 
@@ -788,7 +769,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           }}>
             🥧 Категории товаров
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
+<ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <defs>
                 {detailedStats?.categoryData.map((entry: any, index: number) => {
@@ -875,7 +856,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
           }}>
             📊 Статус партнеров
           </h3>
-          <ResponsiveContainer width="100%" height={250}>
+<ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <defs>
                 <radialGradient id="status-gradient-0" cx="50%" cy="50%" r="50%">
@@ -1175,3 +1156,5 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
     </div>
   )
 }
+
+export default React.memo(Home)

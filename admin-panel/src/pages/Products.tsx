@@ -19,6 +19,12 @@ type Product = {
   description?: string
   price?: number
   imageUrl?: string
+  category?: string
+  categoryId?: number
+  isAvailable?: boolean
+  isActive?: boolean
+  stock?: number
+  sortOrder?: number
 }
 
 export default function Products({ onError }: { onError?: (msg: string) => void }) {
@@ -28,44 +34,35 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState<Product | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+
+  // Get unique categories from products
+  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))).sort()
+
+  // Filter products by selected category
+  const filteredProducts = selectedCategory === 'all'
+    ? products
+    : products.filter(p => p.category === selectedCategory)
 
   const load = async () => {
-    setLoading(true)
-    setError(null)
     try {
-      // Try to fetch first page and detect pagination metadata
-      const first = await fetchProducts({ page: 1, limit: 100 })
-      // Handle array response
-      if (Array.isArray(first)) {
-        setProducts(first)
-      } else {
-        const items = first.items || first.data || []
-        const total = first.total || first.count || null
-        const perPage = first.per_page || first.pageSize || first.limit ||  (Array.isArray(items) ? items.length : 0)
-        if (total && perPage && total > items.length) {
-          // fetch remaining pages
-          const pages = Math.ceil(total / perPage)
-          const allItems = [...items]
-          for (let p = 2; p <= pages; p++) {
-            try {
-              const pageResp = await fetchProducts({ page: p, limit: perPage })
-              const pageItems = pageResp.items || pageResp.data || []
-              if (Array.isArray(pageItems) && pageItems.length > 0) {
-                allItems.push(...pageItems)
-              }
-            } catch (err) {
-              // stop fetching further pages on error
-              console.warn('Failed to fetch products page', p, err)
-              break
-            }
-          }
-          setProducts(allItems)
-        } else {
-          setProducts(items)
-        }
+      setLoading(true)
+      setError(null)
+
+      const data = await fetchProducts()
+
+      // Handle different response formats
+      let productsList: Product[] = []
+      if (Array.isArray(data)) {
+        productsList = data as Product[]
+      } else if (data && typeof data === 'object') {
+        productsList = (data.items || data.data || data.products || []) as Product[]
       }
+
+      setProducts(productsList)
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to load products'
+      console.error('❌ Error loading products:', err)
+      const msg = err?.response?.data?.message || err?.message || 'Не удалось загрузить товары'
       setError(msg)
       onError?.(msg)
     } finally {
@@ -124,27 +121,123 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
         <h2 style={{ color: 'var(--gray-900)', textShadow: 'none', marginBottom: '24px' }}>
           Продукты
         </h2>
-        <button className="button" onClick={() => setCreating(true)}>Новый продукт</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className="button"
+            onClick={load}
+            disabled={loading}
+            style={{ opacity: loading ? 0.6 : 1 }}
+          >
+            🔄 Обновить
+          </button>
+          <button className="button" onClick={() => setCreating(true)}>Новый продукт</button>
+        </div>
       </div>
+
+      {/* Category Filter */}
+      {categories.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
+            Фильтр по категориям:
+          </label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--gray-300)',
+              borderRadius: '4px',
+              backgroundColor: 'white',
+              minWidth: '200px'
+            }}
+          >
+            <option value="all">Все категории ({products.length})</option>
+            {categories.map(category => (
+              <option key={category} value={category}>
+                {category} ({products.filter(p => p.category === category).length})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="card">
-        {loading && <div className="muted">Loading...</div>}
-        {error && <div style={{ color: '#ff7b7b' }}>{error}</div>}
-        {!loading && products.length === 0 && <div className="muted">No products</div>}
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {products.map(p => (
-            <li key={String(p.id)} style={{ padding: 8, borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <strong>{p.name}</strong>
-                <div className="muted" style={{ fontSize: 13 }}>{p.description}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{p.price ? `$${p.price}` : ''}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
-                <button className="button" style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div style={{ fontSize: '24px', marginBottom: '16px' }}>⏳</div>
+            <div className="muted">Загрузка товаров...</div>
+          </div>
+        )}
+        {error && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#ff7b7b' }}>
+            <div style={{ fontSize: '24px', marginBottom: '16px' }}>❌</div>
+            <div style={{ marginBottom: '16px' }}>Ошибка загрузки товаров</div>
+            <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '20px' }}>{error}</div>
+            <button className="button" onClick={load} style={{ background: 'var(--primary)' }}>
+              🔄 Попробовать снова
+            </button>
+          </div>
+        )}
+        {!loading && products.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--gray-500)' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>📦</div>
+            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>
+              Нет товаров
+            </div>
+            <div style={{ fontSize: '14px', opacity: 0.7, marginBottom: '20px' }}>
+              В базе данных пока нет товаров. Добавьте первый товар.
+            </div>
+          </div>
+        )}
+        {!loading && products.length > 0 && filteredProducts.length === 0 && (
+          <div className="muted">В выбранной категории нет продуктов</div>
+        )}
+        {!loading && filteredProducts.length > 0 && (
+          <div>
+            <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--gray-600)' }}>
+              Показано {filteredProducts.length} из {products.length} продуктов
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {filteredProducts.map(p => (
+                <li key={String(p.id)} style={{ padding: 12, borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <strong style={{ fontSize: 16 }}>{p.name}</strong>
+                      {p.category && (
+                        <span style={{
+                          background: 'var(--primary)',
+                          color: 'white',
+                          padding: '2px 6px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold'
+                        }}>
+                          {p.category}
+                        </span>
+                      )}
+                    </div>
+                    <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>{p.description}</div>
+                    <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+                      {p.price && <span className="muted">${p.price}</span>}
+                      {p.stock !== undefined && <span className="muted">Запас: {p.stock}</span>}
+                      {p.isAvailable !== undefined && (
+                        <span style={{
+                          color: p.isAvailable ? '#10b981' : '#ef4444',
+                          fontWeight: 'bold'
+                        }}>
+                          {p.isAvailable ? 'Доступен' : 'Недоступен'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
+                    <button className="button" onClick={() => handleDelete(p)} style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       {creating && (
         <ProductForm
