@@ -6,6 +6,7 @@ import ProductForm from '../components/ProductForm'
 import PartnerProductsPanel from '../components/PartnerProductsPanel'
 import PartnerForm from '../components/PartnerForm2'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { resolveAssetUrl } from '../utils/assets'
 
 // CSS анимации
 const styles = `
@@ -95,6 +96,57 @@ export default function Partners() {
   useEffect(() => {
     load()
   }, [])
+
+  // Robust partner image extractor — supports strings, arrays and nested objects
+  const getPartnerImage = (partnerData: any): string | null => {
+    if (!partnerData) return null
+    const tryExtract = (val: any): string | null => {
+      if (val === undefined || val === null) return null
+      if (typeof val === 'string') return val
+      if (Array.isArray(val) && val.length > 0) return tryExtract(val[0])
+      if (typeof val === 'object') {
+        if (typeof val.url === 'string' && val.url) return val.url
+        if (typeof val.path === 'string' && val.path) return val.path
+        if (typeof val.src === 'string' && val.src) return val.src
+        if (typeof val.file === 'string' && val.file) return val.file
+        if (val.data && (val.data.url || (val.data.attributes && val.data.attributes.url))) {
+          return val.data.url || val.data.attributes.url
+        }
+        if (val.attributes && (val.attributes.url || val.attributes.path)) {
+          return val.attributes.url || val.attributes.path
+        }
+      }
+      return null
+    }
+
+    const fieldNames = ['logoUrl','LogoUrl','Logo','logo','coverImageUrl','CoverImageUrl','cover','Cover','imageUrl','ImageUrl','image','Image','photo','Photo','picture','Picture','thumbnail','Thumbnail','media','Media','file','File','url','Url','images','Images','photos','Photos']
+    const candidates: any[] = []
+    for (const name of fieldNames) {
+      if (partnerData && Object.prototype.hasOwnProperty.call(partnerData, name)) candidates.push((partnerData as any)[name])
+      const foundKey = partnerData && Object.keys(partnerData).find(k => k.toLowerCase() === name.toLowerCase())
+      if (foundKey) candidates.push((partnerData as any)[foundKey])
+    }
+
+    for (const c of candidates) {
+      const found = tryExtract(c)
+      if (found) {
+        const resolved = resolveAssetUrl(found)
+        if (resolved) return resolved
+        return found
+      }
+    }
+
+    if (Array.isArray(partnerData.images) && partnerData.images.length > 0) {
+      const found = tryExtract(partnerData.images[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+    if (Array.isArray(partnerData.photos) && partnerData.photos.length > 0) {
+      const found = tryExtract(partnerData.photos[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+
+    return null
+  }
 
 
   const handleCreate = () => {
@@ -400,10 +452,8 @@ export default function Partners() {
                 }}>
                   {(() => {
                     // Проверяем различные возможные поля для картинки
-                    const imageSrc = p.imageUrl || p.image || p.logo || p.avatar || p.photo
-                    const hasImage = imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== ''
-
-                    if (hasImage) {
+                    const imageSrc = getPartnerImage(p)
+                    if (imageSrc) {
                       return (
                         <img
                           src={imageSrc}

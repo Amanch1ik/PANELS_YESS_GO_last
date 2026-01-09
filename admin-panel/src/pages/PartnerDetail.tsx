@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { fetchPartners, fetchPartnerProducts, createPartnerProduct, updatePartnerProduct, deletePartnerProduct, uploadPartnerProductImage } from '../api/client'
 import ProductForm from '../components/ProductForm'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { resolveAssetUrl } from '../utils/assets'
 
 // CSS анимации
 const styles = `
@@ -151,7 +152,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
 
       // Загружаем товары партнера
       try {
-        const productsData = await fetchPartnerProducts(id)
+        const productsData = await fetchPartnerProducts(id as string)
         const productsList = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
         console.log('📦 Загружены товары партнера:', productsList)
         if (productsList.length > 0) {
@@ -197,7 +198,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     }
   }
 
-  const handleSaveProduct = async (payload: any, imageFile?: File) => {
+  const handleSaveProduct = async (payload: any, imageFile?: File | null) => {
     if (!id) return
     const partnerId = id // id is guaranteed to be defined here
 
@@ -255,7 +256,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     }
   }
 
-  const getPartnerImage = (partnerData: Partner) => {
+  const getPartnerImage = (partnerData: any) => {
     // Проверяем различные возможные поля с картинками
     let imageSrc = partnerData.imageUrl || partnerData.image || partnerData.logo ||
                    partnerData.avatar || partnerData.photo || partnerData.picture
@@ -311,6 +312,64 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     // check boolean/flag fields commonly used by APIs
     if ((p as any).available === true || (p as any).is_available === true || (p as any).in_stock === true) return true
     return false
+  }
+
+  // Robust product image extractor — supports strings, arrays, and common nested objects
+  const getProductImage = (prod: any): string | null => {
+    if (!prod) return null
+
+    const tryExtract = (val: any): string | null => {
+      if (val === undefined || val === null) return null
+      if (typeof val === 'string') return val
+      if (Array.isArray(val) && val.length > 0) return tryExtract(val[0])
+      if (typeof val === 'object') {
+        // Common fields
+        if (typeof val.url === 'string' && val.url) return val.url
+        if (typeof val.path === 'string' && val.path) return val.path
+        if (typeof val.src === 'string' && val.src) return val.src
+        if (typeof val.file === 'string' && val.file) return val.file
+        // Strapi-like payloads
+        if (val.data && (val.data.url || (val.data.attributes && val.data.attributes.url))) {
+          return val.data.url || val.data.attributes.url
+        }
+        if (val.attributes && (val.attributes.url || val.attributes.path)) {
+          return val.attributes.url || val.attributes.path
+        }
+      }
+      return null
+    }
+
+    // try to resolve fields case-insensitively (API may return PascalCase like ImageUrl)
+    const fieldNames = ['imageUrl', 'image', 'photo', 'picture', 'thumbnail', 'media', 'file', 'image_path', 'url', 'Images', 'Photos']
+    const candidates: any[] = []
+    for (const name of fieldNames) {
+      // direct lookup
+      if (prod && Object.prototype.hasOwnProperty.call(prod, name)) candidates.push((prod as any)[name])
+      // case-insensitive search
+      const foundKey = prod && Object.keys(prod).find(k => k.toLowerCase() === name.toLowerCase())
+      if (foundKey) candidates.push((prod as any)[foundKey])
+    }
+
+    for (const c of candidates) {
+      const found = tryExtract(c)
+      if (found) {
+        const resolved = resolveAssetUrl(found)
+        if (resolved) return resolved
+        return found
+      }
+    }
+
+    // Arrays specifically on the product object
+    if (Array.isArray(prod.images) && prod.images.length > 0) {
+      const found = tryExtract(prod.images[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+    if (Array.isArray(prod.photos) && prod.photos.length > 0) {
+      const found = tryExtract(prod.photos[0])
+      if (found) return found.startsWith('http') || found.startsWith('data:') ? found : `https://api.yessgo.org${found.startsWith('/') ? '' : '/'}${found}`
+    }
+
+    return null
   }
 
   if (loading) {
@@ -640,24 +699,8 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                 border: '1px solid var(--gray-200)'
               }}>
                 {(() => {
-                  // Проверяем различные поля с картинками
-                  let imageSrc = product.imageUrl || product.image || product.photo ||
-                                 product.picture || product.thumbnail
-
-                  // Если массив изображений, берем первое
-                  if (Array.isArray(product.images) && product.images.length > 0) {
-                    imageSrc = product.images[0]
-                  }
-                  if (Array.isArray(product.photos) && product.photos.length > 0) {
-                    imageSrc = product.photos[0]
-                  }
-
-                  // Проверяем валидность и добавляем базовый URL если нужно
-                  if (imageSrc && typeof imageSrc === 'string' && imageSrc.trim() !== '') {
-                    if (!imageSrc.startsWith('http') && !imageSrc.startsWith('data:')) {
-                      imageSrc = `https://api.yessgo.org${imageSrc.startsWith('/') ? '' : '/'}${imageSrc}`
-                    }
-
+                  const imageSrc = getProductImage(product)
+                  if (imageSrc) {
                     return (
                       <img
                         src={imageSrc}
@@ -677,9 +720,8 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                         }}
                       />
                     )
-                  } else {
-                    return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
                   }
+                  return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
                 })()}
               </div>
 
