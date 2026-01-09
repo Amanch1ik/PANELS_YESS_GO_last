@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  admin-panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - admin-network
+
+networks:
+  admin-network:
+    driver: bridge

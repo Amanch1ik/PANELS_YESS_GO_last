@@ -1,5 +1,7 @@
 // Lightweight resolver for asset URLs (images/icons)
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'https://api.yessgo.org'
+import api from '../api/client'
+
+const ENV_BASE = (import.meta as any).env?.VITE_API_BASE
 
 export function resolveAssetUrl(url?: string | null): string | undefined {
   if (!url) return undefined
@@ -8,7 +10,10 @@ export function resolveAssetUrl(url?: string | null): string | undefined {
   if (trimmed.startsWith('data:')) return trimmed
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed
   if (trimmed.startsWith('//')) return `https:${trimmed}`
-  const base = (API_BASE as string).replace(/\/$/, '')
+
+  // Prefer explicit env var, otherwise use api.defaults.baseURL if available
+  const apiBaseCandidate = ENV_BASE || (api && (api.defaults as any)?.baseURL) || 'https://api.yessgo.org'
+  const base = String(apiBaseCandidate).replace(/\/$/, '')
   const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
   return `${base}${path}`
 }

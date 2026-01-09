@@ -4,6 +4,8 @@ import { fetchPartners, fetchPartnerProducts, createPartnerProduct, updatePartne
 import ProductForm from '../components/ProductForm'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { resolveAssetUrl } from '../utils/assets'
+import { normalizePartner } from '../services/normalize'
+import PartnerAvatar from '../components/PartnerAvatar'
 
 // CSS анимации
 const styles = `
@@ -71,6 +73,66 @@ const styles = `
     color: var(--accent);
     cursor: pointer;
   }
+  /* Partner logo / avatar styling (match web-version) */
+  .partner-logo {
+    border-radius: 50%;
+    overflow: hidden;
+    border: none;
+    box-shadow: none;
+    width: 80px;
+    height: 80px;
+    min-width: 80px;
+    min-height: 80px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+  .partner-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .partner-logo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+    color: var(--white);
+    font-size: 32px;
+    font-weight: 700;
+  }
+  /* Avatar box with inner circular image to match web-version look */
+  .partner-avatar-box {
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    background: var(--white);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .partner-avatar-circle {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-primary);
+  }
+  .partner-avatar-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+  }
 `
 
 // Создаем элемент style
@@ -114,6 +176,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [partner, setPartner] = useState<Partner | null>(null)
+  const [logoLoaded, setLogoLoaded] = useState<boolean | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -143,39 +206,29 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         setError('Партнер не найден')
         return
       }
+      // normalize partner to ensure logoUrl/coverUrl are available
+      let normalizedPartner = currentPartner
+      try {
+        normalizedPartner = normalizePartner(currentPartner)
+      } catch {
+        // fallback to raw partner if normalization fails
+        normalizedPartner = currentPartner
+      }
 
-      console.log('📦 Загружен партнер:', currentPartner)
-      console.log('🖼️ Поля партнера:', Object.keys(currentPartner))
-      console.log('🖼️ Картинка партнера:', currentPartner.imageUrl || currentPartner.image || currentPartner.logo)
-
-      setPartner(currentPartner)
+      setPartner(normalizedPartner)
 
       // Загружаем товары партнера
       try {
         const productsData = await fetchPartnerProducts(id as string)
         const productsList = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
-        console.log('📦 Загружены товары партнера:', productsList)
+
         // normalize products
         try {
           const { normalizeProduct } = await import('../services/normalize')
           const normalized = productsList.map((pr: any) => normalizeProduct(pr))
-          console.log('🔁 Normalized products sample:', normalized.slice(0,3))
           setProducts(normalized)
         } catch {
           setProducts(productsList)
-        }
-        if (productsList.length > 0) {
-          console.log('🖼️ Первый товар:', productsList[0])
-        if (productsList.length > 0) {
-          console.log('🖼️ Первый товар:', productsList[0])
-          console.log('🖼️ Поля товара:', Object.keys(productsList[0]))
-          console.log('🖼️ Картинка товара:', productsList[0].imageUrl || productsList[0].image)
-          console.log('📊 Stock значения товаров:', productsList.map(p => ({ name: p.name, stock: p.stock })))
-
-          // Подсчет товаров по наличию
-          const inStock = productsList.filter(p => p.stock !== undefined && p.stock !== null && p.stock > 0).length
-          const outOfStock = productsList.filter(p => p.stock === undefined || p.stock === null || p.stock <= 0).length
-          console.log('📊 Статистика наличия:', { inStock, outOfStock, total: productsList.length })
         }
         // setProducts handled in normalization block above
       } catch (productsError) {
@@ -476,44 +529,14 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
             border: '3px solid var(--white)',
             flexShrink: 0
           }}>
-            {getPartnerImage(partner) ? (
-            <img
-                src={getPartnerImage(partner)!}
-                alt={partner.name}
-                width={80}
-                height={80}
-                loading="lazy"
-                decoding="async"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  display: 'block',
-                  background: 'var(--gray-100)',
-                  transition: 'transform 200ms ease, opacity 200ms ease'
-                }}
-                onError={(e) => {
-                  const target = e.currentTarget.parentElement
-                  if (target) {
-                    target.innerHTML = `<div style="width: 100%; height: 100%; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; color: var(--white); font-size: 32px; font-weight: 700;">${getPartnerIcon(partner.name)}</div>`
-                  }
-                }}
-              />
-            ) : (
-              <div style={{
-                width: '100%',
-                height: '100%',
-                background: 'var(--gradient-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--white)',
-                fontSize: '32px',
-                fontWeight: '700'
-              }}>
-                {getPartnerIcon(partner.name)}
-              </div>
-            )}
+            {(() => {
+              const logoUrl = (partner as any).logoUrl || getPartnerImage(partner)
+              return (
+                <div style={{ width: '100%', height: '100%', position: 'relative' }} className="partner-logo">
+                  <PartnerAvatar partner={partner} size={80} innerCircle={56} />
+                </div>
+              )
+            })()}
           </div>
 
           {/* Информация о партнере */}
@@ -697,10 +720,65 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         </div>
       </div>
 
-      {/* Сетка товаров */}
+      {/* Сетка товаров по категориям */}
       {products.length > 0 ? (
-        <div className="product-grid">
-          {products.map((product) => (
+        <div>
+          {/* Группируем товары по категориям */}
+          {(() => {
+            const productsByCategory = products.reduce((acc, product) => {
+              const category = product.category || 'Без категории'
+              if (!acc[category]) {
+                acc[category] = []
+              }
+              acc[category].push(product)
+              return acc
+            }, {} as Record<string, typeof products>)
+
+            return Object.entries(productsByCategory).map(([category, categoryProducts]) => (
+              <div key={category} style={{ marginBottom: '40px' }}>
+                {/* Заголовок категории */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '20px',
+                  padding: '12px 16px',
+                  background: 'linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%)',
+                  borderRadius: '12px',
+                  border: '1px solid var(--gray-200)'
+                }}>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: '20px',
+                    fontWeight: '700',
+                    color: 'var(--gray-900)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{
+                      background: 'var(--primary)',
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      fontWeight: '600'
+                    }}>
+                      {category}
+                    </span>
+                  </h3>
+                  <div style={{
+                    fontSize: '14px',
+                    color: 'var(--gray-600)',
+                    fontWeight: '500'
+                  }}>
+                    {categoryProducts.length} товар{categoryProducts.length !== 1 ? 'ов' : ''}
+                  </div>
+                </div>
+
+                {/* Сетка товаров в категории */}
+                <div className="product-grid">
+                  {categoryProducts.map((product) => (
             <div key={String(product.id)} className="product-card-detail">
               {/* Картинка товара */}
               <div style={{
@@ -899,6 +977,10 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
               </div>
             </div>
           ))}
+                </div>
+              </div>
+            ))
+          })()}
         </div>
       ) : (
         <div style={{

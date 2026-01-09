@@ -6,6 +6,7 @@ import ProductForm from '../components/ProductForm'
 import PartnerProductsPanel from '../components/PartnerProductsPanel'
 import PartnerForm from '../components/PartnerForm2'
 import ConfirmDialog from '../components/ConfirmDialog'
+import PartnerAvatar from '../components/PartnerAvatar'
 import { resolveAssetUrl } from '../utils/assets'
 
 // CSS анимации
@@ -43,6 +44,40 @@ const styles = `
   .product-card:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
+  }
+ 
+  /* Partner logo UI consistent with web-version */
+  .partner-avatar-wrapper {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .partner-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 12px;
+  }
+  .partner-logo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+  }
+  .partner-logo-text {
+    font-size: 26px;
+    font-weight: 700;
+    color: #07b981;
   }
 `
 
@@ -228,7 +263,6 @@ export default function Partners() {
     setTestingAPI(true)
     setError(null)
     try {
-      console.log('🧪 Начинаем тестирование API эндпоинтов...')
       await testPartnerAPI()
       alert('Тестирование API завершено. Проверьте консоль разработчика (F12) для результатов.')
     } catch (err: any) {
@@ -456,66 +490,7 @@ export default function Partners() {
                   boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
                   border: '2px solid var(--white)'
                 }}>
-                  {(() => {
-                    // Проверяем различные возможные поля для картинки
-                    const imageSrc = getPartnerImage(p)
-                    if (imageSrc) {
-                      return (
-                        <img
-                          src={imageSrc}
-                          alt={p.name}
-                          width={56}
-                          height={56}
-                          loading="lazy"
-                          decoding="async"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                            transition: 'transform 200ms ease, opacity 200ms ease',
-                            background: 'var(--gray-100)'
-                          }}
-                          onError={(e) => {
-                            // Если картинка не загружается, показываем иконку
-                            const target = e.currentTarget.parentElement
-                            if (target) {
-                              target.innerHTML = '<div style="width: 100%; height: 100%; background: var(--gradient-primary); display: flex; align-items: center; justify-content: center; color: var(--white); font-size: 24px; font-weight: 700;">🏪</div>'
-                            }
-                          }}
-                        />
-                      )
-                    } else {
-                      // Генерируем иконку на основе названия партнера
-                      const getPartnerIcon = (name: string) => {
-                        const firstLetter = name.charAt(0).toUpperCase()
-                        const icons: { [key: string]: string } = {
-                          'A': '🏪', 'B': '🏬', 'C': '🏭', 'D': '🏪', 'E': '🏬',
-                          'F': '🏭', 'G': '🏪', 'H': '🏬', 'I': '🏭', 'J': '🏪',
-                          'K': '🏬', 'L': '🏭', 'M': '🏪', 'N': '🏬', 'O': '🏭',
-                          'P': '🏪', 'Q': '🏬', 'R': '🏭', 'S': '🏪', 'T': '🏬',
-                          'U': '🏭', 'V': '🏪', 'W': '🏬', 'X': '🏭', 'Y': '🏪', 'Z': '🏬'
-                        }
-                        return icons[firstLetter] || '🏪'
-                      }
-
-                      return (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          background: 'var(--gradient-primary)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--white)',
-                          fontSize: '24px',
-                          fontWeight: '700'
-                        }}>
-                          {getPartnerIcon(p.name)}
-                        </div>
-                      )
-                    }
-                  })()}
+                  <PartnerAvatar partner={p} size={56} innerCircle={48} />
                 </div>
 
                 <div style={{ flex: 1 }}>
