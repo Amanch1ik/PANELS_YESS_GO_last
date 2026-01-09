@@ -155,6 +155,17 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         const productsData = await fetchPartnerProducts(id as string)
         const productsList = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || [])
         console.log('📦 Загружены товары партнера:', productsList)
+        // normalize products
+        try {
+          const { normalizeProduct } = await import('../services/normalize')
+          const normalized = productsList.map((pr: any) => normalizeProduct(pr))
+          console.log('🔁 Normalized products sample:', normalized.slice(0,3))
+          setProducts(normalized)
+        } catch {
+          setProducts(productsList)
+        }
+        if (productsList.length > 0) {
+          console.log('🖼️ Первый товар:', productsList[0])
         if (productsList.length > 0) {
           console.log('🖼️ Первый товар:', productsList[0])
           console.log('🖼️ Поля товара:', Object.keys(productsList[0]))
@@ -166,7 +177,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
           const outOfStock = productsList.filter(p => p.stock === undefined || p.stock === null || p.stock <= 0).length
           console.log('📊 Статистика наличия:', { inStock, outOfStock, total: productsList.length })
         }
-        setProducts(productsList)
+        // setProducts handled in normalization block above
       } catch (productsError) {
         console.warn('Ошибка загрузки товаров партнера:', productsError)
         setProducts([])
@@ -466,14 +477,20 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
             flexShrink: 0
           }}>
             {getPartnerImage(partner) ? (
-              <img
+            <img
                 src={getPartnerImage(partner)!}
                 alt={partner.name}
+                width={80}
+                height={80}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
-                  display: 'block'
+                  display: 'block',
+                  background: 'var(--gray-100)',
+                  transition: 'transform 200ms ease, opacity 200ms ease'
                 }}
                 onError={(e) => {
                   const target = e.currentTarget.parentElement
@@ -705,11 +722,17 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                       <img
                         src={imageSrc}
                         alt={product.name}
+                        width={180}
+                        height={180}
+                        loading="lazy"
+                        decoding="async"
                         style={{
                           width: '100%',
                           height: '100%',
                           objectFit: 'cover',
-                          display: 'block'
+                          display: 'block',
+                          background: 'var(--gray-100)',
+                          transition: 'transform 200ms ease, opacity 200ms ease'
                         }}
                         onError={(e) => {
                           console.warn(`❌ Ошибка загрузки картинки товара ${product.id}:`, imageSrc)

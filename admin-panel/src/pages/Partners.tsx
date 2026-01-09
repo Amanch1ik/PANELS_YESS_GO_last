@@ -87,7 +87,13 @@ export default function Partners() {
       setError(null)
       const data = await fetchPartners()
       const list = Array.isArray(data) ? data : (data.items || data.data || [])
-      setPartners(list)
+      // normalize partners using service logic
+      try {
+        const { normalizePartner } = await import('../services/normalize')
+        setPartners(list.map((p: any) => normalizePartner(p)))
+      } catch {
+        setPartners(list)
+      }
     } finally {
       setLoading(false)
     }
@@ -458,11 +464,17 @@ export default function Partners() {
                         <img
                           src={imageSrc}
                           alt={p.name}
+                          width={56}
+                          height={56}
+                          loading="lazy"
+                          decoding="async"
                           style={{
                             width: '100%',
                             height: '100%',
                             objectFit: 'cover',
-                            display: 'block'
+                            display: 'block',
+                            transition: 'transform 200ms ease, opacity 200ms ease',
+                            background: 'var(--gray-100)'
                           }}
                           onError={(e) => {
                             // Если картинка не загружается, показываем иконку
