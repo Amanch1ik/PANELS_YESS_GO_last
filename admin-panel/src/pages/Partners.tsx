@@ -267,73 +267,9 @@ export default function Partners() {
           ➕ Новый партнер
         </button>
 
-        <button
-          onClick={handleTestAPI}
-          disabled={testingAPI}
-          style={{
-            padding: '12px 20px',
-            background: testingAPI ? 'var(--gray-400)' : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-            color: 'var(--white)',
-            border: 'none',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: testingAPI ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            marginLeft: '12px'
-          }}
-          onMouseEnter={(e) => {
-            if (!testingAPI) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)'
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(99, 102, 241, 0.4)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!testingAPI) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)'
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)'
-            }
-          }}
-        >
-          {testingAPI ? '🔄 Тестируем...' : '🧪 Тест API'}
-        </button>
+        {/* Test API button removed per user request */}
 
-        <button
-          onClick={handleClearCache}
-          disabled={clearingCache}
-          style={{
-            padding: '12px 20px',
-            background: clearingCache ? 'var(--gray-400)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-            color: 'var(--white)',
-            border: 'none',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: clearingCache ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            marginLeft: '12px'
-          }}
-          onMouseEnter={(e) => {
-            if (!clearingCache) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #d97706 0%, #b45309 100%)'
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(245, 158, 11, 0.4)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!clearingCache) {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.3)'
-            }
-          }}
-        >
-          {clearingCache ? '🔄 Очищаем...' : '🗑️ Очистить кэш'}
-        </button>
+        {/* Cache clear button removed per user request */}
       </div>
 
       {/* Сообщения о состоянии */}

@@ -291,6 +291,28 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
     return icons[firstLetter] || '🏪'
   }
 
+  // Helpers to determine stock from various possible API fields
+  const getStockNumber = (p: any): number | null => {
+    if (!p) return null
+    const candidates = ['stock', 'quantity', 'qty', 'count', 'available_count', 'stock_count']
+    for (const key of candidates) {
+      const v = (p as any)[key]
+      if (v === undefined || v === null) continue
+      if (typeof v === 'boolean') return v ? 1 : 0
+      const num = Number(v)
+      if (!Number.isNaN(num)) return Math.floor(num)
+    }
+    return null
+  }
+
+  const isInStock = (p: any): boolean => {
+    const n = getStockNumber(p)
+    if (n !== null) return n > 0
+    // check boolean/flag fields commonly used by APIs
+    if ((p as any).available === true || (p as any).is_available === true || (p as any).in_stock === true) return true
+    return false
+  }
+
   if (loading) {
     return (
       <div className="container">
@@ -510,16 +532,13 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
           </div>
 
           <div className="stat-item">
-            <div style={{
+          <div style={{
               fontSize: '24px',
               fontWeight: '700',
               color: '#16a34a',
               marginBottom: '4px'
             }}>
-              {products.filter(p => {
-                const stock = p.stock
-                return stock !== undefined && stock !== null && stock > 0
-              }).length}
+              {products.filter(p => isInStock(p)).length}
             </div>
             <div style={{
               fontSize: '12px',
@@ -532,16 +551,13 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
           </div>
 
           <div className="stat-item">
-            <div style={{
+          <div style={{
               fontSize: '24px',
               fontWeight: '700',
               color: '#dc2626',
               marginBottom: '4px'
             }}>
-              {products.filter(p => {
-                const stock = p.stock
-                return stock === undefined || stock === null || stock <= 0
-              }).length}
+              {products.filter(p => !isInStock(p)).length}
             </div>
             <div style={{
               fontSize: '12px',
@@ -714,22 +730,17 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                     borderRadius: '12px',
                     fontSize: '12px',
                     fontWeight: '600',
-                    background: (() => {
-                      const stock = product.stock
-                      return (stock !== undefined && stock !== null && stock > 0) ? '#dcfce7' : '#fee2e2'
-                    })(),
-                    color: (() => {
-                      const stock = product.stock
-                      return (stock !== undefined && stock !== null && stock > 0) ? '#16a34a' : '#dc2626'
-                    })()
+                    background: isInStock(product) ? '#dcfce7' : '#fee2e2',
+                    color: isInStock(product) ? '#16a34a' : '#dc2626'
                   }}>
                     {(() => {
-                      const stock = product.stock
-                      if (stock !== undefined && stock !== null && stock > 0) {
-                        return `✅ ${stock} шт.`
-                      } else {
-                        return '❌ Нет в наличии'
+                      const stockNum = getStockNumber(product)
+                      if (stockNum !== null) {
+                        return stockNum > 0 ? `✅ ${stockNum} шт.` : '❌ Нет в наличии'
                       }
+                      // If we only have a boolean flag, show availability without count
+                      if (isInStock(product)) return '✅ В наличии'
+                      return '❌ Нет в наличии'
                     })()}
                   </div>
                 </div>

@@ -347,7 +347,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
 
   // We intentionally do not require `react-window` to avoid build-time import resolution issues.
   // The recent activities list will use a safe non-virtualized scrollable container.
-  const VirtualListComp = null
+  const VirtualListComp: any = null
 
   // when reloadSignal changes, effect will re-run due to fromDate/toDate/selectedPeriod dependencies included above
   // Handler for manual refresh
@@ -595,15 +595,7 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
             trend: '+15%',
             trendUp: true
           },
-          {
-            title: 'Потенциал Yess!Coin',
-            value: `${stats.yessCoins.toLocaleString()} YC`,
-            icon: '🪙',
-            gradient: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-            bgLight: 'rgba(245, 158, 11, 0.1)',
-            trend: '+12%',
-            trendUp: true
-          }
+          // Yess!Coin potential card removed per user request
         ].map((card, index) => (
           <div
             key={card.title}
@@ -951,7 +943,49 @@ export default function Home({ onError }: { onError?: (msg: string) => void }) {
               <div style={{ padding: 12, textAlign: 'center', color: '#ef4444' }}>{recentError}</div>
             )}
             {!recentLoading && !recentError && recentActivities.length === 0 && (
-              <div style={{ padding: 12, textAlign: 'center', color: 'var(--gray-500)' }}>Нет последних действий</div>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ color: 'var(--gray-500)' }}>Нет последних действий</div>
+                  <div>
+                    <button
+                      className="button"
+                      onClick={async () => {
+                        try {
+                          setRecentLoading(true)
+                          const acts = await fetchRecentActivities(10)
+                          const list = Array.isArray(acts) ? acts : (acts.items || acts.data || [])
+                          setRecentActivities((list || []).slice(0, 10))
+                          setRecentError(null)
+                        } catch (e: any) {
+                          setRecentError(e?.message || 'Ошибка загрузки последних действий')
+                        } finally {
+                          setRecentLoading(false)
+                        }
+                      }}
+                      style={{ padding: '6px 10px' }}
+                    >
+                      Обновить
+                    </button>
+                  </div>
+                </div>
+
+                {/* Fallback: show generated summary items when API returned none */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { action: `В каталоге ${stats.products.toLocaleString()} товаров`, created_at: new Date().toISOString(), type: 'summary' },
+                    { action: `Всего партнёров: ${stats.partners.toLocaleString()}`, created_at: new Date().toISOString(), type: 'summary' },
+                    { action: `Всего пользователей: ${stats.users.toLocaleString()}`, created_at: new Date().toISOString(), type: 'summary' }
+                  ].map((item, index) => (
+                    <div key={`fallback-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--gray-50)', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '20px' }}>{index === 0 ? '📦' : index === 1 ? '🏪' : '👥'}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--gray-900)' }}>{item.action}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--gray-500)' }}>Автоген. — {new Date(item.created_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
 
             {!recentLoading && !recentError && recentActivities.length > 0 && (

@@ -16,17 +16,17 @@
     "react-dom": "^18.2.0",
     "react-is": "^19.2.3",
     "react-router-dom": "^6.30.2",
-    "recharts": "^3.6.0",
-    "react-window": "^1.8.8"
+    "react-window": "^1.8.8",
+    "recharts": "^3.6.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.0",
+    "esbuild": "^0.27.2",
     "terser": "^5.44.1",
     "typescript": "^5.2.2",
-    "vite": "^5.2.0",
-    "esbuild": "^0.21.5"
+    "vite": "^7.3.1"
   },
   "dependenciesMeta": {
     "react-window": {
