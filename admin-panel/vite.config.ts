@@ -75,6 +75,13 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/oauth/, '/api/v1/oauth')
       },
+      // Support proxied '/api' prefix during development so frontend can use VITE_API_BASE=/api
+      '/api': {
+        target: 'https://api.yessgo.org',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api/, '/api/v1')
+      },
       '/partner': {
         target: 'https://api.yessgo.org',
         changeOrigin: true,
