@@ -20,7 +20,21 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     }
   }, [partner])
 
-  const logoUrlRaw = (normalized as any).logoUrl || (normalized as any).imageUrl || (partner && (partner.logoUrl || partner.ImageUrl || partner.Image || partner.logo))
+  // Try many possible fields where a partner logo might be stored
+  const logoUrlRaw =
+    (normalized as any).logoUrl ||
+    (normalized as any).imageUrl ||
+    (partner && (
+      partner.logoUrl ||
+      partner.ImageUrl ||
+      partner.Image ||
+      partner.logo ||
+      // nested shapes
+      (partner.logo && partner.logo.url) ||
+      (partner.image && partner.image.url) ||
+      (Array.isArray(partner.images) && partner.images[0] && (partner.images[0].url || partner.images[0].path)) ||
+      (Array.isArray(partner.image) && partner.image[0] && (partner.image[0].url || partner.image[0].path))
+    ))
   let logoUrl = resolveAssetUrl(typeof logoUrlRaw === 'string' ? logoUrlRaw : '') || undefined
   // Fallback: if resolveAssetUrl couldn't resolve a relative path, try window.location.origin + raw path
   if (!logoUrl && typeof logoUrlRaw === 'string' && logoUrlRaw.trim().startsWith('/')) {
