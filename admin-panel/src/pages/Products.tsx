@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { fetchProducts, createProduct, updateProduct, deleteProduct, uploadProductImage } from '../api/client'
+import { fetchProducts, fetchPartners, fetchPartnerProducts, createProduct, updateProduct, deleteProduct, uploadProductImage } from '../api/client'
 import ProductForm from '../components/ProductForm'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -57,6 +57,54 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
         productsList = data as Product[]
       } else if (data && typeof data === 'object') {
         productsList = (data.items || data.data || data.products || []) as Product[]
+      }
+      // If no global products, try to collect products from partners (best-effort)
+      if ((!productsList || productsList.length === 0)) {
+        try {
+          const partnersResp = await fetchPartners()
+          const partnersList: any[] = Array.isArray(partnersResp) ? partnersResp : (partnersResp?.items || partnersResp?.data || [])
+          if (Array.isArray(partnersList) && partnersList.length > 0) {
+            // limit to first 100 partners to avoid huge loads
+            const partnerIds = partnersList.slice(0, 100).map(p => p.id || p._id || p.partner_id).filter(Boolean)
+            const batchSize = 6
+            const collected: Product[] = []
+            for (let i = 0; i < partnerIds.length; i += batchSize) {
+              const batch = partnerIds.slice(i, i + batchSize)
+              const settled = await Promise.allSettled(batch.map(id => fetchPartnerProducts(id)))
+              settled.forEach(r => {
+                if (r.status === 'fulfilled' && r.value) {
+                  const arr = Array.isArray(r.value) ? r.value : (r.value.items || r.value.data || [])
+                  if (Array.isArray(arr)) {
+                    arr.forEach((it: any) => {
+                      // normalize common fields
+                      collected.push({
+                        id: it.id ?? it._id ?? `${it.partner_id || 'p'}-${it.id || Math.random()}`,
+                        name: it.name || it.title || 'Без названия',
+                        description: it.description || it.desc || '',
+                        price: it.price ?? it.cost ?? undefined,
+                        imageUrl: it.image || it.imageUrl || it.images?.[0] || undefined,
+                        category: it.category || it.categoryName || undefined,
+                        categoryId: it.categoryId ?? undefined,
+                        isAvailable: it.isAvailable ?? it.available ?? it.is_active ?? undefined,
+                        isActive: it.is_active ?? undefined,
+                        stock: it.stock ?? it.qty ?? undefined,
+                        sortOrder: it.sortOrder ?? undefined
+                      } as Product)
+                    })
+                  }
+                }
+              })
+              // small pause to reduce 429 risk
+              await new Promise(res => setTimeout(res, 150))
+            }
+            // dedupe by id
+            const map = new Map<string | number, Product>()
+            collected.forEach(p => map.set(String(p.id), p))
+            productsList = Array.from(map.values())
+          }
+        } catch (e) {
+          // ignore partner-collection errors; we'll show empty state below
+        }
       }
 
       setProducts(productsList)
@@ -217,7 +265,9 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
                     </div>
                     <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>{p.description}</div>
                     <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
-                      {p.price && <span className="muted">${p.price}</span>}
+                      {p.price !== undefined && p.price !== null && (
+                        <span className="muted">{Number(p.price).toLocaleString()} сом</span>
+                      )}
                       {p.stock !== undefined && <span className="muted">Запас: {p.stock}</span>}
                       {p.isAvailable !== undefined && (
                         <span style={{

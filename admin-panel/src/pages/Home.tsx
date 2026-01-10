@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts, fetchRecentActivities, clearApiCache } from '../api/client'
 import {
   LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -184,6 +185,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
   const [recentLoading, setRecentLoading] = useState(false)
   const [recentError, setRecentError] = useState<string | null>(null)
   const [reloadSignal, setReloadSignal] = useState(0)
+  const navigate = useNavigate()
 
   // Auto-hide welcome message after 7 seconds with smooth exit animation (longer reading time)
   useEffect(() => {
@@ -286,12 +288,53 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
           }, 0)
         }
 
-        // Чтобы избежать множества запросов и зависаний, не запрашиваем товары каждого партнёра при загрузке.
-        // Вместо этого используем оценку на основе количества партнёров и кэш при необходимости.
+        // Попробуем рассчитать точное количество товаров по партнёрам.
+        // Ограничиваемся первыми N партнёрами и делаем батчевые запросы, чтобы не перегружать API.
+        async function batchCountProductsForPartners(partnersList: any[]) {
+          const maxPartnersToQuery = 50
+          const batchSize = 5
+          const ids = partnersList.slice(0, maxPartnersToQuery).map(p => p.id || p._id || p.partner_id)
+          let sum = 0
+          for (let i = 0; i < ids.length; i += batchSize) {
+            const batch = ids.slice(i, i + batchSize)
+            try {
+              const settled = await Promise.allSettled(batch.map(id => fetchPartnerProducts(id)))
+              settled.forEach(r => {
+                if (r.status === 'fulfilled') {
+                  const data = Array.isArray(r.value) ? r.value : (r.value?.items || r.value?.data || [])
+                  if (Array.isArray(data)) sum += data.length
+                }
+              })
+            } catch (e) {
+              // silent - best effort counting
+            }
+            // Небольшая пауза между батчами, чтобы снизить риск 429
+            await new Promise(res => setTimeout(res, 200))
+          }
+          return sum
+        }
+
         if (totalProductsCount === 0 && finalPartners.length > 0) {
-          totalProductsCount = Math.max(1, finalPartners.length * 6)
-          totalRevenue = totalProductsCount * 1200
-          totalYessCoins = totalProductsCount * 120
+          try {
+            const counted = await batchCountProductsForPartners(finalPartners)
+            if (counted > 0) {
+              totalProductsCount = counted
+              // Попробуем оценить сумму цен и YessCoins, если у нас есть сами продукты (редко)
+              if (products.length === 0) {
+                totalRevenue = totalProductsCount * 1200
+                totalYessCoins = totalProductsCount * 120
+              }
+            } else {
+              // Фоллбек на оценку, если не удалось посчитать
+              totalProductsCount = Math.max(1, finalPartners.length * 6)
+              totalRevenue = totalProductsCount * 1200
+              totalYessCoins = totalProductsCount * 120
+            }
+          } catch (e) {
+            totalProductsCount = Math.max(1, finalPartners.length * 6)
+            totalRevenue = totalProductsCount * 1200
+            totalYessCoins = totalProductsCount * 120
+          }
         }
 
         // Финальные проверки
@@ -917,16 +960,28 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
             🔔 Последние действия
           </h3>
           <div style={{ paddingRight: '6px' }}>
+            {/*
+              Normalize recentActivities to an array shape for rendering.
+              Some API responses may return { items: [] } or { data: [] }.
+            */}
+            {(() => {
+              // keep as inline IIFE to avoid adding new top-level hooks/vars
+              // will be used by subsequent conditional rendering below via `recentList`
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const recentList: any = Array.isArray(recentActivities) ? recentActivities : (recentActivities?.items || recentActivities?.data || [])
+              ;(recentList as any).__isRecentList = true
+              return null
+            })()}
             {recentLoading && (
               <div style={{ padding: 12, textAlign: 'center', color: 'var(--gray-500)' }}>Загрузка...</div>
             )}
             {!recentLoading && recentError && (
               <div style={{ padding: 12, textAlign: 'center', color: '#ef4444' }}>{recentError}</div>
             )}
-            {!recentLoading && !recentError && recentActivities.length === 0 && (
+            {/* @ts-ignore - use recentList normalized above */}
+            {!recentLoading && !recentError && (Array.isArray(recentActivities) ? recentActivities.length === 0 : ((recentActivities?.items || recentActivities?.data || []).length === 0)) && (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ color: 'var(--gray-500)' }}>Нет последних действий</div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 8 }}>
                   <div>
                     <button
                       className="button"
@@ -969,16 +1024,18 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
               </>
             )}
 
-            {!recentLoading && !recentError && recentActivities.length > 0 && (
+            {/* @ts-ignore - use normalized recentList for rendering */}
+            {!recentLoading && !recentError && (Array.isArray(recentActivities) ? recentActivities.length > 0 : ((recentActivities?.items || recentActivities?.data || []).length > 0)) && (
               VirtualListComp ? (
                 <VirtualListComp
                   height={260}
-                  itemCount={recentActivities.length}
+                  itemCount={(Array.isArray(recentActivities) ? recentActivities.length : (recentActivities?.items || recentActivities?.data || []).length)}
                   itemSize={72}
                   width={'100%'}
                 >
                   {({ index, style }: { index: number; style: any }) => {
-                    const item = recentActivities[index]
+                    const listArr = Array.isArray(recentActivities) ? recentActivities : (recentActivities?.items || recentActivities?.data || [])
+                    const item = listArr[index]
                     const text = item.action || item.title || item.message || item.name || 'Событие'
                     const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
                     const timeDisplay = (() => {
@@ -1019,7 +1076,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
                 </VirtualListComp>
               ) : (
                 <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {recentActivities.map((item: any, index: number) => {
+                  {(Array.isArray(recentActivities) ? recentActivities : (recentActivities?.items || recentActivities?.data || [])).map((item: any, index: number) => {
                     const text = item.action || item.title || item.message || item.name || 'Событие'
                     const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
                     const timeDisplay = (() => {
@@ -1098,15 +1155,17 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
               title: 'Управление продуктами',
               description: 'Каталог товаров и управление ценами',
               icon: '📦',
-              gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              shadowColor: 'rgba(240, 147, 251, 0.3)'
+              // use chart sector color for products (#fa709a) to match pie
+              gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+              shadowColor: 'rgba(250, 112, 154, 0.28)'
             },
             {
               title: 'Управление пользователями',
               description: 'Просмотр и управление пользователями',
               icon: '👥',
-              gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-              shadowColor: 'rgba(79, 172, 254, 0.3)'
+              // use softer peach gradient similar to chart sector (#ffecd2)
+              gradient: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+              shadowColor: 'rgba(255, 236, 210, 0.28)'
             },
             {
               title: 'Аналитика и отчеты',
@@ -1138,6 +1197,20 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)'
                 e.currentTarget.style.boxShadow = 'none'
+              }}
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                const routes = ['/partners', '/products', '/users', '/transactions']
+                const route = routes[index] || '/home'
+                try { navigate(route) } catch (e) { /* ignore navigation errors */ }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  const routes = ['/partners', '/products', '/users', '/transactions']
+                  const route = routes[index] || '/home'
+                  try { navigate(route) } catch (err) {}
+                }
               }}
             >
               <div style={{ fontSize: '32px', marginBottom: '8px' }}>{action.icon}</div>

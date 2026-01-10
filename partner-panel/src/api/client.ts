@@ -1,8 +1,9 @@
 import axios from 'axios'
 
 // Use Vite environment variable for API base URL with fallback
+// In development we leave it empty so Vite proxy can forward requests to the real API.
 const API_BASE = ((import.meta as any).env?.VITE_API_BASE) ||
-                 'https://api.yessgo.org/api/v1'
+                 (((import.meta as any).env?.DEV) ? '' : 'https://api.yessgo.org/api/v1')
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -11,6 +12,42 @@ const api = axios.create({
   },
   timeout: 15000
 })
+
+// Simple in-memory cache for GET requests
+const CACHE_TTL = 2 * 60 * 1000 // 2 minutes
+const getCacheKey = (method: string, url: string, params?: any) => `${method.toUpperCase()}:${url}:${JSON.stringify(params||{})}`
+const cacheStore: Record<string, { data: any; ts: number }> = {}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function parseRetryAfter(value: any) {
+  if (!value) return 5
+  try {
+    const v = String(value).trim().toLowerCase()
+    if (v.endsWith('s')) return parseInt(v.slice(0,-1),10) || 5
+    if (v.endsWith('m')) return (parseInt(v.slice(0,-1),10) || 1) * 60
+    const n = parseInt(v,10)
+    if (!isNaN(n)) return n
+  } catch (e) {}
+  return 5
+}
+
+async function requestWithRetry(config: any, retries = 3) {
+  try {
+    const resp = await api.request(config)
+    return resp.data
+  } catch (err: any) {
+    const status = err?.response?.status
+    if (status === 429 && retries > 0) {
+      const retryAfter = parseRetryAfter(err?.response?.data?.retry_after || err?.response?.headers?.['retry-after'])
+      await sleep(retryAfter * 1000)
+      return requestWithRetry(config, retries - 1)
+    }
+    throw err
+  }
+}
 
 // Request interceptor to validate tokens before making calls
 api.interceptors.request.use(
@@ -66,23 +103,39 @@ export async function partnerLogin(email: string, password: string) {
 
 // Partner-specific API functions
 export async function fetchPartnerProfile() {
-  const resp = await api.get('/partner/profile')
-  return resp.data
+  const key = getCacheKey('get','/partner/profile')
+  const cached = cacheStore[key]
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
+  const data = await requestWithRetry({ method: 'get', url: '/partner/profile' })
+  cacheStore[key] = { data, ts: Date.now() }
+  return data
 }
 
 export async function fetchPartnerStats() {
-  const resp = await api.get('/partner/stats')
-  return resp.data
+  const key = getCacheKey('get','/partner/stats')
+  const cached = cacheStore[key]
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
+  const data = await requestWithRetry({ method: 'get', url: '/partner/stats' })
+  cacheStore[key] = { data, ts: Date.now() }
+  return data
 }
 
 export async function fetchPartnerProducts() {
-  const resp = await api.get('/partner/products')
-  return resp.data
+  const key = getCacheKey('get','/partner/products')
+  const cached = cacheStore[key]
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
+  const data = await requestWithRetry({ method: 'get', url: '/partner/products' })
+  cacheStore[key] = { data, ts: Date.now() }
+  return data
 }
 
 export async function fetchPartnerCustomers() {
-  const resp = await api.get('/partner/customers')
-  return resp.data
+  const key = getCacheKey('get','/partner/customers')
+  const cached = cacheStore[key]
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
+  const data = await requestWithRetry({ method: 'get', url: '/partner/customers' })
+  cacheStore[key] = { data, ts: Date.now() }
+  return data
 }
 
 export async function fetchPartnerSales() {
