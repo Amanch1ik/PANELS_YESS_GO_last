@@ -3,9 +3,15 @@ import { API_ENDPOINTS } from "../config/apiEndpoints"
 
 // Use Vite environment variable for API base URL with fallback
 // Priority: VITE_API_BASE > environment-specific URLs > default
-const API_BASE = ((import.meta as any).env?.VITE_API_BASE) ||
-                 ((import.meta as any).env?.PROD ? 'https://api.yessgo.org/api/v1' :
-                  ((import.meta as any).env?.DEV ? '' : 'https://api.yessgo.org/api/v1'))
+const rawViteApiBase = (import.meta as any).env?.VITE_API_BASE
+// When developing with Vite and using '/api' as a proxy prefix, let axios send
+// requests without the extra '/api' base so existing per-prefix dev proxies
+// (like '/users', '/partners', '/admin') can match and rewrite correctly.
+const API_BASE = (rawViteApiBase === '/api' && (import.meta as any).env?.DEV)
+  ? ''
+  : rawViteApiBase ||
+    ((import.meta as any).env?.PROD ? 'https://api.yessgo.org/api/v1' :
+     ((import.meta as any).env?.DEV ? '' : 'https://api.yessgo.org/api/v1'))
 
 const api = axios.create({
   baseURL: API_BASE,
