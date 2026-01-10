@@ -888,6 +888,25 @@ export async function testPartnerAPI() {
 export async function createPartner(payload: Record<string, any>) {
   console.log('🚀 Начинаем создание партнера с данными:', payload)
 
+  // Try local proxy first to avoid CORS and to ensure server-side token usage in development
+  try {
+    // Use relative fetch to call local proxy (same-origin)
+    const localResp = await fetch('/local-api/admin/partners', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (localResp.ok) {
+      const data = await localResp.json()
+      console.log('✅ Partner created via local proxy', data)
+      return data
+    } else {
+      console.warn('Local proxy returned non-OK status', localResp.status)
+    }
+  } catch (e) {
+    console.warn('Local proxy create failed, falling back to direct endpoints:', e)
+  }
+
   // Пробуем разные эндпоинты для создания партнеров
   const endpoints = [
     '/admin/partners',           // Админ эндпоинт
@@ -1039,6 +1058,13 @@ export async function createPartner(payload: Record<string, any>) {
 
   console.error('❌ Все эндпоинты для создания партнера вернули ошибки, включая прямые запросы')
   throw new Error('Не удалось создать партнера. Проверьте подключение к API и доступные эндпоинты.')
+}
+
+// Create partner panel credentials (admin-only)
+export async function createPartnerCredentials(partnerId: string | number, payload: Record<string, any>) {
+  // Expected payload: { username?: string, type?: 'temporary_password'|'one_time_token', sendEmail?: boolean }
+  const resp = await api.post(`/admin/partners/${partnerId}/credentials`, payload)
+  return resp.data
 }
 
 export async function updatePartner(id: string | number, payload: Record<string, any>) {

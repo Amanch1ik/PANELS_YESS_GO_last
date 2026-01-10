@@ -8,6 +8,7 @@ import PartnerForm from '../components/PartnerForm2'
 import ConfirmDialog from '../components/ConfirmDialog'
 import PartnerAvatar from '../components/PartnerAvatar'
 import { resolveAssetUrl } from '../utils/assets'
+import PartnerCredentialsModal from '../components/PartnerCredentialsModal'
 
 // CSS анимации
 const styles = `
@@ -114,6 +115,7 @@ export default function Partners() {
   const [testingAPI, setTestingAPI] = useState(false)
   const [clearingCache, setClearingCache] = useState(false)
   const navigate = useNavigate()
+  const [credModalPartner, setCredModalPartner] = useState<Partner | null>(null)
 
 
   const load = async () => {
@@ -240,6 +242,8 @@ export default function Partners() {
           category: payload.category,
           phone: payload.phone,
           email: payload.email,
+          // pass password collected from form to backend create call
+          password: payload.password,
           address: payload.address,
           website: payload.website,
           two_gis_url: payload.two_gis_url,
@@ -619,6 +623,24 @@ export default function Partners() {
                 </button>
 
                 <button
+                  onClick={() => setCredModalPartner(p)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    background: 'var(--gray-50)',
+                    color: 'var(--gray-700)',
+                    border: '1px solid var(--gray-300)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🔑 Учётные
+                </button>
+
+                <button
                   onClick={() => handleDelete(p)}
                   style={{
                     padding: '10px 12px',
@@ -655,6 +677,7 @@ export default function Partners() {
       {creating && <PartnerForm onCancel={() => setCreating(false)} onSave={handleSave} />}
       {editing && <PartnerForm initial={editing as any} onCancel={() => setEditing(null)} onSave={handleSave} />}
       {deleting && <ConfirmDialog title="Удалить партнера" message={`Удалить "${deleting.name}"?`} onCancel={() => setDeleting(null)} onConfirm={performDelete} />}
+      {credModalPartner && <PartnerCredentialsModal partnerId={credModalPartner.id} partnerName={credModalPartner.name} onClose={() => setCredModalPartner(null)} onCreated={(res) => { alert('Учётные данные созданы'); setCredModalPartner(null) }} />}
     </div>
   )
 }
