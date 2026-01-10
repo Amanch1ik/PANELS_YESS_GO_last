@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { fetchProducts, fetchPartners, fetchPartnerProducts, createProduct, updateProduct, deleteProduct, uploadProductImage } from '../api/client'
+import { FixedSizeList as VirtualList } from 'react-window'
 import ProductForm from '../components/ProductForm'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -31,6 +32,9 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [partnerFetchLimit, setPartnerFetchLimit] = useState(20)
+  const [isAggregated, setIsAggregated] = useState(false)
+  const [partnersAvailableCount, setPartnersAvailableCount] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState<Product | null>(null)
@@ -64,8 +68,11 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
           const partnersResp = await fetchPartners()
           const partnersList: any[] = Array.isArray(partnersResp) ? partnersResp : (partnersResp?.items || partnersResp?.data || [])
           if (Array.isArray(partnersList) && partnersList.length > 0) {
-            // limit to first 100 partners to avoid huge loads
-            const partnerIds = partnersList.slice(0, 100).map(p => p.id || p._id || p.partner_id).filter(Boolean)
+            // mark aggregated mode and record available partners
+            setIsAggregated(true)
+            setPartnersAvailableCount(partnersList.length)
+            // limit partners queried by partnerFetchLimit to avoid huge loads
+            const partnerIds = partnersList.slice(0, partnerFetchLimit).map(p => p.id || p._id || p.partner_id).filter(Boolean)
             const batchSize = 6
             const collected: Product[] = []
             for (let i = 0; i < partnerIds.length; i += batchSize) {
@@ -244,48 +251,71 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
             <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--gray-600)' }}>
               Показано {filteredProducts.length} из {products.length} продуктов
             </div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {filteredProducts.map(p => (
-                <li key={String(p.id)} style={{ padding: 12, borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <strong style={{ fontSize: 16 }}>{p.name}</strong>
-                      {p.category && (
-                        <span style={{
-                          background: 'var(--primary)',
-                          color: 'white',
-                          padding: '2px 6px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: 'bold'
-                        }}>
-                          {p.category}
-                        </span>
-                      )}
+            <div style={{ height: Math.min(600, filteredProducts.length * 84), width: '100%' }}>
+              <VirtualList
+                height={Math.min(600, filteredProducts.length * 84)}
+                itemCount={filteredProducts.length}
+                itemSize={84}
+                width="100%"
+              >
+                {({ index, style }) => {
+                  const p = filteredProducts[index]
+                  return (
+                    <div key={String(p.id)} style={{ ...style, padding: 12, borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <strong style={{ fontSize: 16 }}>{p.name}</strong>
+                          {p.category && (
+                            <span style={{
+                              background: 'var(--primary)',
+                              color: 'white',
+                              padding: '2px 6px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 'bold'
+                            }}>
+                              {p.category}
+                            </span>
+                          )}
+                        </div>
+                        <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>{p.description}</div>
+                        <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+                          {p.price !== undefined && p.price !== null && (
+                            <span className="muted">{Number(p.price).toLocaleString()} сом</span>
+                          )}
+                          {p.stock !== undefined && <span className="muted">Запас: {p.stock}</span>}
+                          {p.isAvailable !== undefined && (
+                            <span style={{
+                              color: p.isAvailable ? '#10b981' : '#ef4444',
+                              fontWeight: 'bold'
+                            }}>
+                              {p.isAvailable ? 'Доступен' : 'Недоступен'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
+                        <button className="button" onClick={() => handleDelete(p)} style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
+                      </div>
                     </div>
-                    <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>{p.description}</div>
-                    <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
-                      {p.price !== undefined && p.price !== null && (
-                        <span className="muted">{Number(p.price).toLocaleString()} сом</span>
-                      )}
-                      {p.stock !== undefined && <span className="muted">Запас: {p.stock}</span>}
-                      {p.isAvailable !== undefined && (
-                        <span style={{
-                          color: p.isAvailable ? '#10b981' : '#ef4444',
-                          fontWeight: 'bold'
-                        }}>
-                          {p.isAvailable ? 'Доступен' : 'Недоступен'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
-                    <button className="button" onClick={() => handleDelete(p)} style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  )
+                }}
+              </VirtualList>
+            </div>
+            {isAggregated && partnersAvailableCount && partnerFetchLimit < partnersAvailableCount && (
+              <div style={{ textAlign: 'center', marginTop: 12 }}>
+                <button
+                  className="button"
+                  onClick={async () => {
+                    setPartnerFetchLimit(prev => Math.min((partnersAvailableCount || prev), prev + 20))
+                    await load()
+                  }}
+                >
+                  Показать ещё партнёров ({partnerFetchLimit}/{partnersAvailableCount})
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
