@@ -183,6 +183,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) {
@@ -501,6 +502,62 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
 
   return (
     <div className="container">
+      {/* Lightbox modal for product images */}
+      {lightboxSrc && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLightboxSrc(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 24
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '90%',
+              maxHeight: '90%',
+              borderRadius: 12,
+              overflow: 'hidden',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+              background: 'var(--white)'
+            }}
+          >
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setLightboxSrc(null)}
+                aria-label="Close"
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: 8,
+                  zIndex: 2,
+                  background: 'rgba(0,0,0,0.6)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 6,
+                  padding: '6px 8px',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+              <img
+                src={lightboxSrc!}
+                alt="Preview"
+                style={{ display: 'block', maxWidth: '100%', maxHeight: 'calc(90vh - 48px)', objectFit: 'contain', background: 'var(--gray-100)' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Навигационная цепочка */}
       <div className="breadcrumb" onClick={() => navigate('/partners')}>
         <span>🏠</span>
@@ -810,8 +867,10 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                           objectFit: 'cover',
                           display: 'block',
                           background: 'var(--gray-100)',
-                          transition: 'transform 200ms ease, opacity 200ms ease'
+                          transition: 'transform 200ms ease, opacity 200ms ease',
+                          cursor: 'pointer'
                         }}
+                        onClick={() => setLightboxSrc(imageSrc)}
                         onError={(e) => {
                           console.warn(`❌ Ошибка загрузки картинки товара ${product.id}:`, imageSrc)
                           const target = e.currentTarget.parentElement
