@@ -53,7 +53,7 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     height: `${size}px`,
     borderRadius: rounded ? Math.round(size * 0.2) : 8,
     background: 'var(--white)',
-    boxShadow: '0 8px 20px rgba(0,0,0,0.08)',
+    boxShadow: 'none',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -75,7 +75,9 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     width: '100%',
     height: '100%',
     objectFit: 'cover',
-    display: loaded === true ? 'block' : 'none'
+    display: loaded === true ? 'block' : 'none',
+    transform: 'scale(1.08)',
+    transition: 'transform 180ms ease'
   }
 
   const placeholderStyle: React.CSSProperties = {
