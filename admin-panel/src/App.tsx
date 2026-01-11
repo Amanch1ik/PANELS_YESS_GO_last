@@ -44,11 +44,38 @@ const LoadingSpinner = () => (
   </div>
 )
 
+// Lightweight app shell shown while routes lazy-load — improves perceived load time
+const AppShell = () => (
+  <div>
+    <header style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--white)', boxShadow: 'var(--shadow-md)', borderRadius: '16px', marginBottom: '32px', border: '1px solid var(--gray-200)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '24px', color: 'var(--accent)' }}>
+        <img src="/favicon.svg" alt="logo" style={{ width: 32, height: 32 }} />
+        YESS!GO Админ
+      </div>
+      <nav style={{ display: 'flex', gap: 8 }}>
+        <div style={{ width: 90, height: 36, background: 'var(--gray-100)', borderRadius: 8 }} />
+        <div style={{ width: 90, height: 36, background: 'var(--gray-100)', borderRadius: 8 }} />
+        <div style={{ width: 90, height: 36, background: 'var(--gray-100)', borderRadius: 8 }} />
+      </nav>
+    </header>
+
+    <main style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+      {[0,1,2].map(i => (
+        <div key={i} style={{ background: 'var(--white)', borderRadius: 12, padding: 20, minHeight: 100, border: '1px solid var(--gray-200)' }}>
+          <div style={{ width: '60%', height: 18, background: 'var(--gray-100)', borderRadius: 6, marginBottom: 12 }} />
+          <div style={{ width: '40%', height: 12, background: 'var(--gray-100)', borderRadius: 6 }} />
+        </div>
+      ))}
+    </main>
+  </div>
+)
+
 // Компонент навигации
 function Navigation() {
   const location = useLocation()
   const currentPath = location.pathname
-
+  // Hide navigation bar on the login page
+  if (currentPath === '/login') return null
   useEffect(() => {
     // Preload критически важных компонентов
     if ('requestIdleCallback' in window) {
@@ -149,7 +176,7 @@ function Navigation() {
 }
 
 // Основное приложение с маршрутизацией
-function AppContent() {
+function AppContent({ onLogin }: { onLogin?: () => void }) {
   const [globalError, setGlobalError] = useState<string | null>(null)
   const location = useLocation()
   const onError = (msg: string) => setGlobalError(msg)
@@ -181,9 +208,10 @@ function AppContent() {
 
       <Navigation />
 
-      <Suspense fallback={<LoadingSpinner />}>
+      <Suspense fallback={<AppShell />}>
         <Routes>
           <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/login" element={<Login onLogin={onLogin || (() => {})} onError={onError} />} />
           <Route path="/home" element={<Home onError={onError} />} />
           <Route path="/partners" element={<Partners />} />
           <Route path="/partners/:id" element={<PartnerDetail onError={onError} />} />
@@ -239,7 +267,7 @@ export default function App() {
           v7_relativeSplatPath: true,
         }}
       >
-        <AppContent />
+        <AppContent onLogin={() => setAuthenticated(true)} />
       </Router>
     </NotificationProvider>
   )
