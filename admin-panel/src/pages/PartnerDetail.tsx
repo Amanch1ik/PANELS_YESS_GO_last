@@ -589,8 +589,15 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
             {(() => {
               const logoUrl = (partner as any).logoUrl || getPartnerImage(partner)
               return (
-                <div style={{ width: '100%', height: '100%', position: 'relative' }} className="partner-logo">
-                  <PartnerAvatar partner={partner} size={80} innerCircle={56} />
+                <div
+                  style={{ width: '100%', height: '100%', position: 'relative', cursor: logoUrl ? 'pointer' : 'default' }}
+                  className="partner-logo"
+                  role={logoUrl ? 'button' : undefined}
+                  tabIndex={logoUrl ? 0 : undefined}
+                  onClick={() => { if (logoUrl) setLightboxSrc(logoUrl) }}
+                  onKeyDown={(e) => { if (logoUrl && (e.key === 'Enter' || e.key === ' ')) { setLightboxSrc(logoUrl) } }}
+                >
+                  <PartnerAvatar partner={partner} size={80} innerCircle={60} />
                 </div>
               )
             })()}
@@ -806,7 +813,8 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                   padding: '12px 16px',
                   background: 'linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%)',
                   borderRadius: '12px',
-                  border: '1px solid var(--gray-200)'
+                  border: '1px solid var(--gray-200)',
+                  color: 'var(--gray-900)'
                 }}>
                   <h3 style={{
                     margin: 0,
@@ -819,7 +827,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                   }}>
                     <span style={{
                       background: 'var(--primary)',
-                      color: 'white',
+                      color: 'var(--gray-900)',
                       padding: '4px 12px',
                       borderRadius: '20px',
                       fontSize: '14px',

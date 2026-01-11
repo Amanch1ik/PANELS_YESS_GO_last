@@ -491,8 +491,9 @@ export default function Partners() {
                   height: '56px',
                   borderRadius: '12px',
                   overflow: 'hidden',
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-                  border: '2px solid var(--white)'
+                  boxShadow: 'none',
+                  border: 'none',
+                  background: 'transparent'
                 }}>
                   <PartnerAvatar partner={p} size={56} innerCircle={48} />
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { resolveAssetUrl, imageResource } from '../utils/assets'
 import { normalizePartner } from '../services/normalize'
 
@@ -68,7 +68,9 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'var(--gradient-primary)'
+    background: 'var(--gradient-primary)',
+    border: '3px solid #D4AF37',
+    boxShadow: '0 4px 12px rgba(212,175,55,0.12)'
   }
 
   const imgStyle: React.CSSProperties = {
@@ -76,7 +78,7 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     height: '100%',
     objectFit: 'cover',
     display: loaded === true ? 'block' : 'none',
-    transform: 'scale(1.08)',
+    transform: 'scale(1.12)',
     transition: 'transform 180ms ease'
   }
 
@@ -119,13 +121,25 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     }
   }, [logoUrl])
 
+  // set fetchpriority attribute on the img element (avoid TypeScript/React prop typing issues)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  useEffect(() => {
+    try {
+      if (imgRef.current && logoUrl) {
+        imgRef.current.setAttribute('fetchpriority', 'high')
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [logoUrl])
+
   return (
     <div style={outerStyle} className="partner-avatar-wrapper">
       <div
         style={{
           ...circleStyle,
           // if placeholder available, show it as background while real image loads
-          backgroundImage: placeholderSrc ? `url(${placeholderSrc})` : circleStyle.background
+          backgroundImage: placeholderSrc ? `url(${placeholderSrc})` : undefined
         }}
         className="partner-avatar-circle"
       >
@@ -140,13 +154,12 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
               alt={partner?.name || partner?.Name || 'partner'}
               loading="eager"
               decoding="async"
-              /* use lowercase attribute to avoid React warning in dev */
-              fetchpriority="high"
               width={innerCircle}
               height={innerCircle}
               style={imgStyle}
               onLoad={() => setLoaded(true)}
               onError={() => setLoaded(false)}
+              ref={imgRef}
             />
           </picture>
         ) : null}
