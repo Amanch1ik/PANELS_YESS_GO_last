@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import SkeletonGrid from '../components/Skeleton'
 import { fetchTransactions, getUser } from '../api/client'
 import TransactionDetailModal from '../components/TransactionDetailModal'
 
@@ -468,13 +469,8 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
       </div>
 
       {loading ? (
-        <div className="card" style={{ padding: '40px', textAlign: 'center' }}>
-          <div className="muted">Загрузка транзакций...</div>
-          {(fromDate || toDate) && (
-            <div style={{ fontSize: '12px', color: 'var(--gray-500)', marginTop: '8px' }}>
-              Применяются фильтры дат: {fromDate && `с ${fromDate}`} {toDate && `по ${toDate}`}
-            </div>
-          )}
+        <div className="card" style={{ padding: 12 }}>
+          <SkeletonGrid count={8} columns={1} />
         </div>
       ) : error ? (
         <div className="card" style={{ padding: '20px', background: '#fee', border: '1px solid #fcc' }}>

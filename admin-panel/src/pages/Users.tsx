@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import SkeletonGrid from '../components/Skeleton'
 import { fetchUsers, getUserBalance } from '../api/client'
 
 // Добавляем CSS анимации и responsive стили
@@ -724,22 +725,8 @@ export default function Users({ onError }: { onError?: (msg: string) => void }) 
 
       <div className="card">
         {loading && (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px',
-            color: 'var(--gray-600)',
-            fontSize: '16px'
-          }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              border: '3px solid var(--gray-300)',
-              borderTop: '3px solid var(--accent)',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 16px auto'
-            }}></div>
-            Загрузка пользователей...
+          <div style={{ padding: 12 }}>
+            <SkeletonGrid count={6} columns={2} />
           </div>
         )}
 

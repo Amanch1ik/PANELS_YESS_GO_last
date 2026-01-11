@@ -1,20 +1,17 @@
 import axios from 'axios'
 import { API_ENDPOINTS } from "../config/apiEndpoints"
+import { API_BASE_URL } from '../config/api'
 
-// Use Vite environment variable for API base URL with fallback
-// Priority: VITE_API_BASE > environment-specific URLs > default
-const rawViteApiBase = (import.meta as any).env?.VITE_API_BASE
-// When developing with Vite and using '/api' as a proxy prefix, let axios send
-// requests without the extra '/api' base so existing per-prefix dev proxies
-// (like '/users', '/partners', '/admin') can match and rewrite correctly.
-const API_BASE = (rawViteApiBase === '/api' && (import.meta as any).env?.DEV)
-  ? ''
-  : rawViteApiBase ||
-    ((import.meta as any).env?.PROD ? 'https://api.yessgo.org/api/v1' :
-     ((import.meta as any).env?.DEV ? '' : 'https://api.yessgo.org/api/v1'))
+// Decide axios baseURL similar to web-version repo:
+const isDev = (import.meta as any).env?.DEV
+const useDirectApi = (import.meta as any).env?.VITE_DIRECT_API === 'true'
+const baseURL = useDirectApi ? `${API_BASE_URL}/api` : (isDev ? '/api' : `${API_BASE_URL}/api`)
+
+// Log resolved API base for easier debugging in dev/prod
+console.log('🔧 Resolved API config:', { API_BASE_URL, isDev, useDirectApi, baseURL })
 
 const api = axios.create({
-  baseURL: API_BASE,
+  baseURL,
   headers: {
     'Content-Type': 'application/json'
   },
@@ -24,6 +21,64 @@ const api = axios.create({
 // Request interceptor to validate tokens before making calls
 api.interceptors.request.use(
   config => {
+    // Normalize URL to avoid double /api when baseURL already contains /api (dev proxy).
+    // Accept both '/api' and 'api' prefixes (with or without leading slash).
+    try {
+      const cfgUrl = config.url || ''
+      const base = String(api.defaults.baseURL || '')
+      // If base contains '/api' and url starts with optional '/api' or 'api', strip it.
+      if (base.toLowerCase().includes('/api') && /^\/?api(\/v1)?/i.test(cfgUrl)) {
+        console.log('[RequestInterceptor] normalize before:', { base, url: cfgUrl })
+        // Remove repeated leading '/api' or '/api/v1' sequences (one or more)
+        config.url = cfgUrl.replace(/^(\/?api(\/v1)?)+/i, '')
+        console.log('[RequestInterceptor] normalize after:', { base, url: config.url })
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // Simple client-side rate limiter (token bucket) to avoid spamming backend during dev causing 429s.
+    // Capacity: 5 requests per second, refill every 1000ms.
+    try {
+      ;(api as any)._rateLimiter = (api as any)._rateLimiter || {}
+      let rateLimiter = (api as any)._rateLimiter
+      if (!rateLimiter._initialized) {
+        rateLimiter.capacity = 5
+        rateLimiter.tokens = rateLimiter.capacity
+        rateLimiter.refillMs = 1000
+        rateLimiter.lastRefill = Date.now()
+        rateLimiter.queue = []
+        rateLimiter.tryRefill = function tryRefill() {
+          const now = Date.now()
+          if (now - rateLimiter.lastRefill >= rateLimiter.refillMs) {
+            rateLimiter.tokens = rateLimiter.capacity
+            rateLimiter.lastRefill = now
+            while (rateLimiter.tokens > 0 && rateLimiter.queue.length > 0) {
+              const p = rateLimiter.queue.shift()
+              rateLimiter.tokens--
+              p.resolve(p.config)
+            }
+          }
+        }
+        // Periodically check to refill queued requests if any
+        rateLimiter._interval = setInterval(rateLimiter.tryRefill, Math.max(200, Math.floor(rateLimiter.refillMs / 4)))
+        rateLimiter._initialized = true
+      }
+
+      rateLimiter = (api as any)._rateLimiter
+      rateLimiter.tryRefill()
+      if (rateLimiter.tokens > 0) {
+        rateLimiter.tokens--
+      } else {
+        // Delay this request until a token is available
+        return new Promise((resolve) => {
+          rateLimiter.queue.push({ resolve, config })
+        })
+      }
+    } catch (e) {
+      // ignore rate limiter errors
+    }
+
     // For auth endpoints, don't validate tokens (they handle their own logic)
     if (config.url?.includes('/auth/')) {
       return config
@@ -296,66 +351,91 @@ function isGloballyRateLimited() {
   return Date.now() < globalRateLimitedUntil
 }
 
-export async function fetchPartners(params?: Record<string, any>) {
-  // Проверяем кэш
-  const cachedData = getCachedData('partners')
-  if (cachedData) {
-    return cachedData
-  }
-  // Если уже есть глобальная блокировка по rate-limit, возвращаем кеш или пустой результат
-  if (isGloballyRateLimited()) {
-    console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для partners')
-    // Schedule a background refresh timed to when the limit expires
-    const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
-    scheduleBackgroundFetch('partners', () => fetchPartners(params), remaining)
-    return cachedData || []
-  }
-
+// Pending fetch dedupe map to avoid duplicate identical requests triggering rate limits
+const pendingFetches: Map<string, Promise<any>> = new Map()
+function pendingKey(endpoint: string, params?: Record<string, any>) {
   try {
-    console.log('📥 Загружаем список партнеров...')
-    const resp = await api.get(API_ENDPOINTS.partners.list, { params })
+    return `${endpoint}::${params ? JSON.stringify(params) : ''}`
+  } catch {
+    return `${endpoint}::`
+  }
+}
 
-    // Проверяем, что ответ содержит данные
-    if (resp.data && typeof resp.data === 'object') {
-      console.log(`✅ Загружено партнеров:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
-      setCachedData('partners', resp.data)
-      return resp.data
-    } else {
-      console.warn('⚠️ API вернул неожиданный формат данных:', resp.data)
-      return []
+export async function fetchPartners(params?: Record<string, any>) {
+  const key = pendingKey('partners.list', params)
+  if (pendingFetches.has(key)) {
+    return await pendingFetches.get(key)
+  }
+  const promise = (async () => {
+    // Проверяем кэш
+    const cachedData = getCachedData('partners')
+    if (cachedData) {
+      return cachedData
     }
-  } catch (err: any) {
-    const status = err?.response?.status
-    console.error('❌ Ошибка загрузки партнеров:', status, err?.response?.data)
+    // Если уже есть глобальная блокировка по rate-limit, возвращаем кеш или пустой результат
+    if (isGloballyRateLimited()) {
+      console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для partners')
+      // Schedule a background refresh timed to when the limit expires
+      const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+      scheduleBackgroundFetch('partners', () => fetchPartners(params), remaining)
+      return cachedData || []
+    }
 
-    // Специальная обработка для известных ошибок
-    if (status === 429) {
-      // Если есть кэш — используем его и планируем фоновой рефреш после Retry-After
-      const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
-      const retrySeconds = parseRetryAfter(retryAfterHeader)
-      setGlobalRateLimit(retrySeconds)
-      console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
-      if (cachedData) {
-        // Schedule background refresh but return cached immediately
-        scheduleBackgroundFetch('partners', () => fetchPartners(params), retrySeconds)
-        return cachedData
+    try {
+      console.log('📥 Загружаем список партнеров...')
+      const resp = await api.get(API_ENDPOINTS.partners.list, { params })
+
+      // Проверяем, что ответ содержит данные
+      if (resp.data && typeof resp.data === 'object') {
+        console.log(`✅ Загружено партнеров:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+        setCachedData('partners', resp.data)
+        return resp.data
+      } else {
+        console.warn('⚠️ API вернул неожиданный формат данных:', resp.data)
+        return []
       }
-      // Нет кэша — безопасно вернуть пустой массив и планировать фоновую попытку
-      scheduleBackgroundFetch('partners', () => fetchPartners(params), retrySeconds)
+    } catch (err: any) {
+      const status = err?.response?.status
+      const code = err?.code
+      const message = err?.message
+      console.error('❌ Ошибка загрузки партнеров:', { status, code, message, data: err?.response?.data })
+
+      // Специальная обработка для известных ошибок
+      if (status === 429) {
+        // Если есть кэш — используем его и планируем фоновой рефреш после Retry-After
+        const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+        const retrySeconds = parseRetryAfter(retryAfterHeader)
+        setGlobalRateLimit(retrySeconds)
+        console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
+        if (cachedData) {
+          // Schedule background refresh but return cached immediately
+          scheduleBackgroundFetch('partners', () => fetchPartners(params), retrySeconds)
+          return cachedData
+        }
+        // Нет кэша — безопасно вернуть пустой массив и планировать фоновую попытку
+        scheduleBackgroundFetch('partners', () => fetchPartners(params), retrySeconds)
+        return []
+      }
+      if (status === 401) {
+        console.error('🚫 Необходима авторизация для просмотра партнеров')
+        throw new Error('Необходима авторизация')
+      }
+      if (status === 403) {
+        console.error('🚫 Недостаточно прав для просмотра партнеров')
+        throw new Error('Недостаточно прав доступа')
+      }
+
+      // Для других ошибок возвращаем пустой массив вместо краша
+      console.warn('⚠️ Возвращаем пустой список партнеров из-за ошибки API')
       return []
     }
-    if (status === 401) {
-      console.error('🚫 Необходима авторизация для просмотра партнеров')
-      throw new Error('Необходима авторизация')
-    }
-    if (status === 403) {
-      console.error('🚫 Недостаточно прав для просмотра партнеров')
-      throw new Error('Недостаточно прав доступа')
-    }
-
-    // Для других ошибок возвращаем пустой массив вместо краша
-    console.warn('⚠️ Возвращаем пустой список партнеров из-за ошибки API')
-    return []
+  })()
+  pendingFetches.set(key, promise)
+  try {
+    const res = await promise
+    return res
+  } finally {
+    pendingFetches.delete(key)
   }
 }
 
@@ -365,57 +445,70 @@ export async function fetchMessages() {
 }
 
 export async function fetchUsers(params?: Record<string, any>) {
-  // Проверяем кэш
-  const cachedData = getCachedData('users')
-  if (cachedData) {
-    return cachedData
+  const key = pendingKey('users.list', params)
+  if (pendingFetches.has(key)) {
+    return await pendingFetches.get(key)
   }
-  if (isGloballyRateLimited()) {
-    console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для users')
-    const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
-    scheduleBackgroundFetch('users', () => fetchUsers(params), remaining)
-    return cachedData || []
-  }
-
-  try {
-    console.log('📥 Загружаем список пользователей...')
-    const resp = await api.get(API_ENDPOINTS.users.list, { params })
-
-    if (resp.data && typeof resp.data === 'object') {
-      console.log(`✅ Загружено пользователей:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
-      setCachedData('users', resp.data)
-      return resp.data
-    } else {
-      console.warn('⚠️ API вернул неожиданный формат данных для пользователей:', resp.data)
-      return []
+  const promise = (async () => {
+    // Проверяем кэш
+    const cachedData = getCachedData('users')
+    if (cachedData) {
+      return cachedData
     }
-  } catch (err: any) {
-    const status = err?.response?.status
-    console.error('❌ Ошибка загрузки пользователей:', status, err?.response?.data)
+    if (isGloballyRateLimited()) {
+      console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для users')
+      const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+      scheduleBackgroundFetch('users', () => fetchUsers(params), remaining)
+      return cachedData || []
+    }
 
-    if (status === 429) {
-      const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
-      const retrySeconds = parseRetryAfter(retryAfterHeader)
-      setGlobalRateLimit(retrySeconds)
-      console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
-      if (cachedData) {
-        scheduleBackgroundFetch('users', () => fetchUsers(params), retrySeconds)
-        return cachedData
+    try {
+      console.log('📥 Загружаем список пользователей...')
+      const resp = await api.get(API_ENDPOINTS.users.list, { params })
+
+      if (resp.data && typeof resp.data === 'object') {
+        console.log(`✅ Загружено пользователей:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+        setCachedData('users', resp.data)
+        return resp.data
+      } else {
+        console.warn('⚠️ API вернул неожиданный формат данных для пользователей:', resp.data)
+        return []
       }
-      scheduleBackgroundFetch('users', () => fetchUsers(params), retrySeconds)
+    } catch (err: any) {
+      const status = err?.response?.status
+      console.error('❌ Ошибка загрузки пользователей:', status, err?.response?.data)
+
+      if (status === 429) {
+        const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+        const retrySeconds = parseRetryAfter(retryAfterHeader)
+        setGlobalRateLimit(retrySeconds)
+        console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
+        if (cachedData) {
+          scheduleBackgroundFetch('users', () => fetchUsers(params), retrySeconds)
+          return cachedData
+        }
+        scheduleBackgroundFetch('users', () => fetchUsers(params), retrySeconds)
+        return []
+      }
+      if (status === 401) {
+        console.error('🚫 Необходима авторизация для просмотра пользователей')
+        throw new Error('Необходима авторизация')
+      }
+      if (status === 403) {
+        console.error('🚫 Недостаточно прав для просмотра пользователей')
+        throw new Error('Недостаточно прав доступа')
+      }
+
+      console.warn('⚠️ Возвращаем пустой список пользователей из-за ошибки API')
       return []
     }
-    if (status === 401) {
-      console.error('🚫 Необходима авторизация для просмотра пользователей')
-      throw new Error('Необходима авторизация')
-    }
-    if (status === 403) {
-      console.error('🚫 Недостаточно прав для просмотра пользователей')
-      throw new Error('Недостаточно прав доступа')
-    }
-
-    console.warn('⚠️ Возвращаем пустой список пользователей из-за ошибки API')
-    return []
+  })()
+  pendingFetches.set(key, promise)
+  try {
+    const res = await promise
+    return res
+  } finally {
+    pendingFetches.delete(key)
   }
 }
 
@@ -425,57 +518,72 @@ export async function getUser(id: string | number) {
 }
 
 export async function fetchProducts(params?: Record<string, any>) {
-  // Проверяем кэш
-  const cachedData = getCachedData('products')
-  if (cachedData) {
-    return cachedData
+  const key = pendingKey('products.list', params)
+  if (pendingFetches.has(key)) {
+    return await pendingFetches.get(key)
   }
-  if (isGloballyRateLimited()) {
-    console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для products')
-    const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
-    scheduleBackgroundFetch('products', () => fetchProducts(params), remaining)
-    return cachedData || []
-  }
-
-  try {
-    console.log('📥 Загружаем список продуктов...')
-    const resp = await api.get(API_ENDPOINTS.products.list, { params })
-
-    if (resp.data && typeof resp.data === 'object') {
-      console.log(`✅ Загружено продуктов:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
-      setCachedData('products', resp.data)
-      return resp.data
-    } else {
-      console.warn('⚠️ API вернул неожиданный формат данных для продуктов:', resp.data)
-      return []
+  const promise = (async () => {
+    // Проверяем кэш
+    const cachedData = getCachedData('products')
+    if (cachedData) {
+      return cachedData
     }
-  } catch (err: any) {
-    const status = err?.response?.status
-    console.error('❌ Ошибка загрузки продуктов:', status, err?.response?.data)
+    if (isGloballyRateLimited()) {
+      console.warn('⏳ Глобальный rate-limit активен — возвращаем кэш (если есть) или пустой список для products')
+      const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+      scheduleBackgroundFetch('products', () => fetchProducts(params), remaining)
+      return cachedData || []
+    }
 
-    if (status === 429) {
-      const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
-      const retrySeconds = parseRetryAfter(retryAfterHeader)
-      setGlobalRateLimit(retrySeconds)
-      console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
-      if (cachedData) {
-        scheduleBackgroundFetch('products', () => fetchProducts(params), retrySeconds)
-        return cachedData
+    try {
+      console.log('📥 Загружаем список продуктов...')
+      const resp = await api.get(API_ENDPOINTS.products.list, { params })
+
+      if (resp.data && typeof resp.data === 'object') {
+        console.log(`✅ Загружено продуктов:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
+        setCachedData('products', resp.data)
+        return resp.data
+      } else {
+        console.warn('⚠️ API вернул неожиданный формат данных для продуктов:', resp.data)
+        return []
       }
-      scheduleBackgroundFetch('products', () => fetchProducts(params), retrySeconds)
+    } catch (err: any) {
+      const status = err?.response?.status
+      const code = err?.code
+      const message = err?.message
+      console.error('❌ Ошибка загрузки продуктов:', { status, code, message, data: err?.response?.data })
+
+      if (status === 429) {
+        const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+        const retrySeconds = parseRetryAfter(retryAfterHeader)
+        setGlobalRateLimit(retrySeconds)
+        console.error('🚫 API временно недоступен (слишком много запросов). Retry-After:', retrySeconds, 's')
+        if (cachedData) {
+          scheduleBackgroundFetch('products', () => fetchProducts(params), retrySeconds)
+          return cachedData
+        }
+        scheduleBackgroundFetch('products', () => fetchProducts(params), retrySeconds)
+        return []
+      }
+      if (status === 401) {
+        console.error('🚫 Необходима авторизация для просмотра продуктов')
+        throw new Error('Необходима авторизация')
+      }
+      if (status === 403) {
+        console.error('🚫 Недостаточно прав для просмотра продуктов')
+        throw new Error('Недостаточно прав доступа')
+      }
+
+      console.warn('⚠️ Возвращаем пустой список продуктов из-за ошибки API')
       return []
     }
-    if (status === 401) {
-      console.error('🚫 Необходима авторизация для просмотра продуктов')
-      throw new Error('Необходима авторизация')
-    }
-    if (status === 403) {
-      console.error('🚫 Недостаточно прав для просмотра продуктов')
-      throw new Error('Недостаточно прав доступа')
-    }
-
-    console.warn('⚠️ Возвращаем пустой список продуктов из-за ошибки API')
-    return []
+  })()
+  pendingFetches.set(key, promise)
+  try {
+    const res = await promise
+    return res
+  } finally {
+    pendingFetches.delete(key)
   }
 }
 
@@ -544,24 +652,98 @@ export async function fetchAuditLogs(params?: Record<string, any>) {
 
 // Fetch recent activities/events - try common endpoints in order
 export async function fetchRecentActivities(limit: number = 10, params?: Record<string, any>) {
-  const endpoints = ['/activities', '/events', '/admin/activities', '/admin/events']
-  for (const ep of endpoints) {
-    try {
-      const query = { limit, ...(params || {}) }
-      const resp = await api.get(ep, { params: query })
-      if (resp.status === 200 && resp.data) {
-        return resp.data
-      }
-    } catch (err: any) {
-      // If endpoint not found, try next one; bubble up other errors
-      if (err?.response?.status === 404) {
+  const key = pendingKey('recentActivities', { limit, ...(params || {}) })
+  if (pendingFetches.has(key)) {
+    return await pendingFetches.get(key)
+  }
+
+  const normalizeList = (d: any): any[] | null => {
+    if (!d) return null
+    if (Array.isArray(d)) return d
+    if (d.items && Array.isArray(d.items)) return d.items
+    if (d.data && Array.isArray(d.data)) return d.data
+    if (d.notifications && Array.isArray(d.notifications)) return d.notifications
+    if (d.messages && Array.isArray(d.messages)) return d.messages
+    if (d.results && Array.isArray(d.results)) return d.results
+    if (d.rows && Array.isArray(d.rows)) return d.rows
+    return null
+  }
+
+  const promise = (async () => {
+    // Expanded candidate endpoints with common /list and /v1 variants
+    const rawCandidates = [
+      '/activities',
+      '/activities/list',
+      '/events',
+      '/events/list',
+      '/admin/activities',
+      '/admin/activities/list',
+      '/admin/events',
+      '/admin/events/list',
+      '/notifications',
+      '/notifications/list',
+      '/admin/notifications',
+      '/admin/notifications/list',
+      '/notifications/me',
+      '/messages',
+      '/messages/list',
+      '/admin/messages',
+      '/admin/messages/list'
+    ]
+
+    for (const ep of rawCandidates) {
+      try {
+        const query = { limit, ...(params || {}) }
+        console.log('[RecentActivities] trying endpoint', ep, 'with', query)
+        // Normalize candidate path: remove any leading /api or /api/v1 to avoid double /api in dev proxy
+        const candidatePath = String(ep).replace(/^\/api(\/v1)?/i, '')
+        const resp = await api.get(candidatePath, { params: query })
+
+        if (resp.status === 200 && resp.data !== undefined) {
+          const data = resp.data
+          // Prefer returning a plain array when possible
+          const list = normalizeList(data)
+          if (list) {
+            console.log('[RecentActivities] success from', ep, 'items=', list.length)
+            return list
+          }
+          // If response is a single object, wrap into array for UI compatibility
+          if (data && typeof data === 'object') {
+            console.log('[RecentActivities] received object - wrapping into array from', ep)
+            return [data]
+          }
+          // Otherwise return empty array
+          return []
+        } else {
+          console.log('[RecentActivities] endpoint returned non-200:', ep, resp.status)
+        }
+      } catch (err: any) {
+        const status = err?.response?.status
+        // Log full response body when available for easier debugging
+        if (err?.response?.data) {
+          console.warn('[RecentActivities] endpoint error body:', ep, err.response.data)
+        }
+        console.warn('[RecentActivities] endpoint failed', ep, { status, message: err?.message })
+        // If endpoint not found, continue to next candidate
+        if (status === 404) continue
+        // For rate limiting, bubble up to be handled globally
+        if (status === 429) throw err
+        // For other network errors, try next candidate
         continue
       }
-      throw err
     }
+
+    // If none found, return empty array
+    return []
+  })()
+
+  pendingFetches.set(key, promise)
+  try {
+    const res = await promise
+    return res
+  } finally {
+    pendingFetches.delete(key)
   }
-  // If none found, return empty array
-  return []
 }
 
 export async function fetchTransactions(params?: Record<string, any>) {
@@ -1104,11 +1286,16 @@ export async function uploadProductImage(productId: string | number, file: File)
 
 export async function fetchPartnerProducts(partnerId: string | number) {
   const key = String(partnerId)
-  const cached = partnerProductsCache[key]
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log('📦 Используем кэшированные товары партнёра (memory):', partnerId)
-    return cached.data
+  const dedupeKey = pendingKey(`partnerProducts.${key}`)
+  if (pendingFetches.has(dedupeKey)) {
+    return await pendingFetches.get(dedupeKey)
   }
+  const promise = (async () => {
+    const cached = partnerProductsCache[key]
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log('📦 Используем кэшированные товары партнёра (memory):', partnerId)
+      return cached.data
+    }
   // Try persistent storage for partner products
   try {
     const raw = localStorage.getItem(`${STORAGE_PREFIX}partnerProducts-${key}`)
@@ -1143,6 +1330,14 @@ export async function fetchPartnerProducts(partnerId: string | number) {
     // При ошибке возвращаем пустой массив (без броска), чтобы UI не падал
     console.warn(`⚠️ Ошибка загрузки товаров партнёра ${partnerId}:`, err?.response?.status || err.message)
     return []
+  }
+  })()
+  pendingFetches.set(dedupeKey, promise)
+  try {
+    const res = await promise
+    return res
+  } finally {
+    pendingFetches.delete(dedupeKey)
   }
 }
 
