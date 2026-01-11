@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { resolveAssetUrl } from '../utils/assets'
 import { normalizePartner } from '../services/normalize'
 import PartnerAvatar from '../components/PartnerAvatar'
+import SkeletonGrid from '../components/Skeleton'
 
 // CSS анимации
 const styles = `
@@ -178,12 +179,63 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
   const [partner, setPartner] = useState<Partner | null>(null)
   const [logoLoaded, setLogoLoaded] = useState<boolean | null>(null)
   const [products, setProducts] = useState<Product[]>([])
+  const [selectedProductFilters, setSelectedProductFilters] = useState<string[]>([])
+  const productFilters = React.useMemo(() => {
+    const map = new Map<string, number>()
+    try {
+      products.forEach(p => {
+        const vals: string[] = []
+        if (p.category) vals.push(String(p.category))
+        // support tags array or comma-separated string
+        if ((p as any).tags) {
+          const t = (p as any).tags
+          if (Array.isArray(t)) t.forEach((x:any) => vals.push(String(x)))
+          else vals.push(...String(t).split(/[,;/|]+/).map((s:string)=>s.trim()).filter(Boolean))
+        }
+        vals.forEach(v => {
+          const key = v.trim()
+          if (!key) return
+          map.set(key, (map.get(key) || 0) + 1)
+        })
+      })
+    } catch (e) {
+      // ignore
+    }
+    return Array.from(map.entries()).map(([k,v])=>({ name: k, count: v }))
+  }, [products])
+
+  const filteredProductsByFilters = React.useMemo(() => {
+    if (!selectedProductFilters || selectedProductFilters.length === 0) return products
+    const sel = selectedProductFilters.map(s => s.toLowerCase().trim())
+    return products.filter(p => {
+      const vals: string[] = []
+      if (p.category) vals.push(String(p.category))
+      if ((p as any).tags) {
+        const t = (p as any).tags
+        if (Array.isArray(t)) t.forEach((x:any)=>vals.push(String(x)))
+        else vals.push(...String(t).split(/[,;/|]+/).map((s:string)=>s.trim()).filter(Boolean))
+      }
+      const normalized = vals.map(v=>v.toLowerCase())
+      // include product if it matches any selected filter
+      return sel.some(s => normalized.includes(s))
+    })
+  }, [products, selectedProductFilters])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [showProductFilterMenu, setShowProductFilterMenu] = useState<boolean>(false)
+  const [tempSelectedProductFilters, setTempSelectedProductFilters] = useState<string[]>([])
+
+  const toggleProductFilterMenu = () => {
+    // when opening, initialize temp selections from active selections
+    if (!showProductFilterMenu) {
+      setTempSelectedProductFilters(selectedProductFilters || [])
+    }
+    setShowProductFilterMenu(v => !v)
+  }
 
   useEffect(() => {
     if (!id) {
@@ -439,26 +491,9 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
 
   if (loading) {
     return (
-      <div className="container">
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '400px',
-          flexDirection: 'column'
-        }}>
-          <div style={{
-            width: '50px',
-            height: '50px',
-            border: '4px solid var(--gray-300)',
-            borderTop: '4px solid var(--accent)',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            marginBottom: '20px'
-          }}></div>
-          <div style={{ color: 'var(--gray-600)', fontSize: '16px' }}>
-            Загрузка информации о партнере...
-          </div>
+      <div className="container" style={{ paddingTop: 0 }}>
+        <div style={{ marginBottom: 20 }}>
+          <SkeletonGrid count={2} columns={2} itemHeight={140} />
         </div>
       </div>
     )
@@ -575,7 +610,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
         border: '1px solid rgba(0, 0, 0, 0.05)',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '24px', flexWrap: 'wrap' }}>
           {/* Картинка партнера */}
           <div style={{
             width: '80px',
@@ -677,92 +712,101 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
           </div>
         </div>
 
+        {/* Product filters available via the Filters button next to the product count */}
+
         {/* Статистика */}
-        <div className="stats-grid">
-          <div className="stat-item">
-            <div style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: 'var(--accent)',
-              marginBottom: '4px'
-            }}>
-              {products.length}
-            </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'var(--gray-600)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              Всего товаров
-            </div>
-          </div>
+        {/* displayedProducts reflects active product filters */}
+        {(() => {
+          const displayedProducts = filteredProductsByFilters
+          return (
+            <div className="stats-grid">
+              <div className="stat-item">
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: 'var(--accent)',
+                  marginBottom: '4px'
+                }}>
+                  {displayedProducts.length}
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: 'var(--gray-600)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Всего товаров
+                </div>
+              </div>
 
-          <div className="stat-item">
-          <div style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: '#16a34a',
-              marginBottom: '4px'
-            }}>
-              {products.filter(p => isInStock(p)).length}
-            </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'var(--gray-600)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              В наличии
-            </div>
-          </div>
+              <div className="stat-item">
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: '#16a34a',
+                  marginBottom: '4px'
+                }}>
+                  {displayedProducts.filter(p => isInStock(p)).length}
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: 'var(--gray-600)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  В наличии
+                </div>
+              </div>
 
-          <div className="stat-item">
-          <div style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: '#dc2626',
-              marginBottom: '4px'
-            }}>
-              {products.filter(p => !isInStock(p)).length}
-            </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'var(--gray-600)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              Нет в наличии
-            </div>
-          </div>
+              <div className="stat-item">
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: '#dc2626',
+                  marginBottom: '4px'
+                }}>
+                  {displayedProducts.filter(p => !isInStock(p)).length}
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: 'var(--gray-600)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Нет в наличии
+                </div>
+              </div>
 
-          <div className="stat-item">
-            <div style={{
-              fontSize: '24px',
-              fontWeight: '700',
-              color: '#7c3aed',
-              marginBottom: '4px'
-            }}>
-              {products.length > 0 ? Math.round(products.reduce((sum, p) => sum + (p.price || 0), 0) / products.length) : 0} сом
+              <div className="stat-item">
+                <div style={{
+                  fontSize: '24px',
+                  fontWeight: '700',
+                  color: '#7c3aed',
+                  marginBottom: '4px'
+                }}>
+                  {displayedProducts.length > 0 ? Math.round(displayedProducts.reduce((sum, p) => sum + (p.price || 0), 0) / displayedProducts.length) : 0} сом
+                </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: 'var(--gray-600)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
+                }}>
+                  Средняя цена
+                </div>
+              </div>
             </div>
-            <div style={{
-              fontSize: '12px',
-              color: 'var(--gray-600)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              Средняя цена
-            </div>
-          </div>
-        </div>
-      </div>
+          )
+        })()}
+          {/* end of stats (rendered above based on filtered products) */}
 
       {/* Заголовок секции товаров */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: '24px'
+        marginBottom: '24px',
+        position: 'relative'
       }}>
         <h2 style={{
           margin: 0,
@@ -776,281 +820,387 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
           <span style={{ fontSize: '28px' }}>📦</span>
           Товары партнера
         </h2>
-        <div style={{
-          fontSize: '14px',
-          color: 'var(--gray-600)',
-          background: 'var(--gray-50)',
-          padding: '8px 16px',
-          borderRadius: '20px',
-          border: '1px solid var(--gray-200)'
-        }}>
-          {products.length} товар{products.length !== 1 ? 'ов' : ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={toggleProductFilterMenu}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid var(--gray-200)',
+              background: 'var(--white)',
+              color: 'var(--gray-900)',
+              cursor: 'pointer',
+              fontWeight: 700
+            }}
+          >
+            Фильтры
+          </button>
+          <div style={{
+            fontSize: '14px',
+            color: 'var(--gray-600)',
+            background: 'var(--gray-50)',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            border: '1px solid var(--gray-200)'
+          }}>
+            {products.length} товар{products.length !== 1 ? 'ов' : ''}
+          </div>
         </div>
+        {showProductFilterMenu && productFilters.length > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: 'calc(100% + 8px)',
+            right: 0,
+            padding: 12,
+            background: 'var(--white)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+            zIndex: 60,
+            minWidth: 240,
+            maxWidth: 'min(520px, 90vw)',
+            maxHeight: '50vh',
+            overflowY: 'auto',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button onClick={() => setShowProductFilterMenu(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+            </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {productFilters.map(f => {
+                    const active = tempSelectedProductFilters.includes(f.name)
+                    return (
+                      <button
+                        key={f.name}
+                        onClick={() => {
+                          setTempSelectedProductFilters(prev => active ? prev.filter(x => x !== f.name) : [...prev, f.name])
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 999,
+                          background: active ? 'var(--primary)' : 'var(--gray-50)',
+                          color: active ? 'var(--white)' : 'var(--gray-700)',
+                          border: '1px solid rgba(0,0,0,0.04)',
+                          cursor: 'pointer',
+                          fontWeight: 600
+                        }}
+                      >
+                        {f.name} {f.count ? `(${f.count})` : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        console.log('[PartnerDetail] Applying product filters:', tempSelectedProductFilters)
+                        // apply staged filters (use a copy)
+                        setSelectedProductFilters(Array.isArray(tempSelectedProductFilters) ? [...tempSelectedProductFilters] : [])
+                      } catch (e) {
+                        console.warn('[PartnerDetail] Error applying filters', e)
+                        setSelectedProductFilters([])
+                      } finally {
+                        // close the menu after applying
+                        setShowProductFilterMenu(false)
+                      }
+                    }}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      background: 'var(--primary)',
+                      color: 'var(--gray-900)',
+                      border: 'none',
+                      fontWeight: 700,
+                      boxShadow: '0 6px 18px rgba(0,0,0,0.08)'
+                    }}
+                  >
+                    Применить
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTempSelectedProductFilters([])
+                      setSelectedProductFilters([])
+                      setShowProductFilterMenu(false)
+                    }}
+                    style={{ padding: '6px 10px', borderRadius: 8 }}
+                  >
+                    Сбросить
+                  </button>
+                </div>
+          </div>
+        )}
       </div>
 
       {/* Сетка товаров по категориям */}
-      {products.length > 0 ? (
+      {filteredProductsByFilters.length > 0 ? (
         <div>
           {/* Группируем товары по категориям */}
           {(() => {
-            const productsByCategory = products.reduce((acc, product) => {
+            const productsByCategory = filteredProductsByFilters.reduce((acc, product) => {
               const category = product.category || 'Без категории'
-              if (!acc[category]) {
-                acc[category] = []
-              }
+              if (!acc[category]) acc[category] = []
               acc[category].push(product)
               return acc
-            }, {} as Record<string, typeof products>)
+            }, {} as Record<string, Product[]>)
 
-            return Object.entries(productsByCategory).map(([category, categoryProducts]) => (
-              <div key={category} style={{ marginBottom: '40px' }}>
-                {/* Заголовок категории */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '20px',
-                  padding: '12px 16px',
-                  background: 'linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%)',
-                  borderRadius: '12px',
-                  border: '1px solid var(--gray-200)',
-                  color: 'var(--gray-900)'
-                }}>
-                  <h3 style={{
-                    margin: 0,
-                    fontSize: '20px',
-                    fontWeight: '700',
-                    color: 'var(--gray-900)',
+            return Object.keys(productsByCategory).map((category) => {
+              const categoryProducts = productsByCategory[category] || []
+              return (
+                <div key={category} style={{ marginBottom: '40px' }}>
+                  {/* Заголовок категории */}
+                  <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px'
+                    justifyContent: 'space-between',
+                    marginBottom: '20px',
+                    padding: '12px 16px',
+                    background: 'linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%)',
+                    borderRadius: '12px',
+                    border: '1px solid var(--gray-200)',
+                    color: 'var(--gray-900)'
                   }}>
-                    <span style={{
-                      background: 'var(--primary)',
+                    <h3 style={{
+                      margin: 0,
+                      fontSize: '20px',
+                      fontWeight: '700',
                       color: 'var(--gray-900)',
-                      padding: '4px 12px',
-                      borderRadius: '20px',
-                      fontSize: '14px',
-                      fontWeight: '600'
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}>
-                      {category}
-                    </span>
-                  </h3>
-                  <div style={{
-                    fontSize: '14px',
-                    color: 'var(--gray-600)',
-                    fontWeight: '500'
-                  }}>
-                    {categoryProducts.length} товар{categoryProducts.length !== 1 ? 'ов' : ''}
+                      <span style={{
+                        background: 'var(--primary)',
+                        color: 'var(--gray-900)',
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '14px',
+                        fontWeight: '600'
+                      }}>
+                        {category}
+                      </span>
+                    </h3>
+                    <div style={{
+                      fontSize: '14px',
+                      color: 'var(--gray-600)',
+                      fontWeight: '500'
+                    }}>
+                      {categoryProducts.length} товар{categoryProducts.length !== 1 ? 'ов' : ''}
+                    </div>
                   </div>
-                </div>
 
-                {/* Сетка товаров в категории */}
-                <div className="product-grid">
-                  {categoryProducts.map((product) => (
-            <div key={String(product.id)} className="product-card-detail">
-              {/* Картинка товара */}
-              <div style={{
-                width: '100%',
-                height: '180px',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                marginBottom: '16px',
-                background: 'var(--gray-100)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '1px solid var(--gray-200)'
-              }}>
-                {(() => {
-                  const imageSrc = getProductImage(product)
-                  if (imageSrc) {
-                    return (
-                      <img
-                        src={imageSrc}
-                        alt={product.name}
-                        width={180}
-                        height={180}
-                        loading="lazy"
-                        decoding="async"
-                        style={{
+                  {/* Сетка товаров в категории */}
+                  <div className="product-grid">
+                    {categoryProducts.map((product) => (
+                      <div key={String(product.id)} className="product-card-detail">
+                        {/* Картинка товара */}
+                        <div style={{
                           width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                          display: 'block',
+                          height: '180px',
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                          marginBottom: '16px',
                           background: 'var(--gray-100)',
-                          transition: 'transform 200ms ease, opacity 200ms ease',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => setLightboxSrc(imageSrc)}
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '1px solid var(--gray-200)'
+                        }}>
+                          {(() => {
+                            const imageSrc = getProductImage(product)
+                            if (imageSrc) {
+                              return (
+                                <img
+                                  src={imageSrc}
+                                  alt={product.name}
+                                  width={180}
+                                  height={180}
+                                  loading="lazy"
+                                  decoding="async"
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'cover',
+                                    display: 'block',
+                                    background: 'var(--gray-100)',
+                                    transition: 'transform 200ms ease, opacity 200ms ease',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => setLightboxSrc(imageSrc)}
                         onError={(e) => {
                           console.warn(`❌ Ошибка загрузки картинки товара ${product.id}:`, imageSrc)
                           const target = e.currentTarget.parentElement
                           if (target) {
-                            target.innerHTML = '<div style="font-size: 48px; opacity: 0.5;">📦</div>'
+                            // avoid injecting raw HTML inside JSX parsing contexts — create element instead
+                            target.innerHTML = ''
+                            const placeholder = document.createElement('div')
+                            placeholder.textContent = '📦'
+                            placeholder.style.fontSize = '48px'
+                            placeholder.style.opacity = '0.5'
+                            target.appendChild(placeholder)
                           }
                         }}
-                      />
-                    )
-                  }
-                  return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
-                })()}
-              </div>
+                                />
+                              )
+                            }
+                            return <div style={{ fontSize: '48px', opacity: 0.5 }}>📦</div>
+                          })()}
+                        </div>
 
-              {/* Информация о товаре */}
-              <div>
-                <h3 style={{
-                  margin: '0 0 8px 0',
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: 'var(--gray-900)',
-                  lineHeight: '1.3'
-                }}>
-                  {product.name}
-                </h3>
+                        {/* Информация о товаре */}
+                        <div>
+                          <h3 style={{
+                            margin: '0 0 8px 0',
+                            fontSize: '18px',
+                            fontWeight: '600',
+                            color: 'var(--gray-900)',
+                            lineHeight: '1.3'
+                          }}>
+                            {product.name}
+                          </h3>
 
-                {product.description && (
-                  <p style={{
-                    margin: '0 0 12px 0',
-                    fontSize: '14px',
-                    color: 'var(--gray-600)',
-                    lineHeight: '1.4',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
-                    {product.description}
-                  </p>
-                )}
+                          {product.description && (
+                            <p style={{
+                              margin: '0 0 12px 0',
+                              fontSize: '14px',
+                              color: 'var(--gray-600)',
+                              lineHeight: '1.4',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden'
+                            }}>
+                              {product.description}
+                            </p>
+                          )}
 
-                {/* Цена и наличие */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '12px'
-                }}>
-                  <div style={{
-                    fontSize: '20px',
-                    fontWeight: '700',
-                    color: 'var(--accent)'
-                  }}>
-                    {product.price || 0} сом
-                  </div>
+                          {/* Цена и наличие */}
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '12px'
+                          }}>
+                            <div style={{
+                              fontSize: '20px',
+                              fontWeight: '700',
+                              color: 'var(--accent)'
+                            }}>
+                              {product.price || 0} сом
+                            </div>
 
-                  <div style={{
-                    padding: '4px 8px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    background: isInStock(product) ? '#dcfce7' : '#fee2e2',
-                    color: isInStock(product) ? '#16a34a' : '#dc2626'
-                  }}>
-                    {(() => {
-                      const stockNum = getStockNumber(product)
-                      if (stockNum !== null) {
-                        return stockNum > 0 ? `✅ ${stockNum} шт.` : '❌ Нет в наличии'
-                      }
-                      // If we only have a boolean flag, show availability without count
-                      if (isInStock(product)) return '✅ В наличии'
-                      return '❌ Нет в наличии'
-                    })()}
+                            <div style={{
+                              padding: '4px 8px',
+                              borderRadius: '12px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              background: isInStock(product) ? '#dcfce7' : '#fee2e2',
+                              color: isInStock(product) ? '#16a34a' : '#dc2626'
+                            }}>
+                              {(() => {
+                                const stockNum = getStockNumber(product)
+                                if (stockNum !== null) {
+                                  return stockNum > 0 ? `✅ ${stockNum} шт.` : '❌ Нет в наличии'
+                                }
+                                if (isInStock(product)) return '✅ В наличии'
+                                return '❌ Нет в наличии'
+                              })()}
+                            </div>
+                          </div>
+
+                          {/* SKU и категория */}
+                          {(product.sku || product.category) && (
+                            <div style={{
+                              display: 'flex',
+                              gap: '8px',
+                              marginBottom: '12px',
+                              fontSize: '12px',
+                              color: 'var(--gray-500)'
+                            }}>
+                              {product.sku && (
+                                <span style={{
+                                  background: 'var(--gray-100)',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  SKU: {product.sku}
+                                </span>
+                              )}
+                              {product.category && (
+                                <span style={{
+                                  background: 'var(--gray-100)',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px'
+                                }}>
+                                  {product.category}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Кнопки действий */}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={() => handleEditProduct(product)}
+                              style={{
+                                flex: 1,
+                                padding: '8px 12px',
+                                background: 'var(--accent)',
+                                color: 'var(--white)',
+                                border: 'none',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-1px)'
+                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(7, 185, 129, 0.3)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)'
+                                e.currentTarget.style.boxShadow = 'none'
+                              }}
+                            >
+                              ✏️ Изменить
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteProduct(product)}
+                              style={{
+                                padding: '8px 12px',
+                                background: 'var(--gray-100)',
+                                color: 'var(--gray-700)',
+                                border: '1px solid var(--gray-300)',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#fee2e2'
+                                e.currentTarget.style.color = '#dc2626'
+                                e.currentTarget.style.borderColor = '#fca5a5'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'var(--gray-100)'
+                                e.currentTarget.style.color = 'var(--gray-700)'
+                                e.currentTarget.style.borderColor = 'var(--gray-300)'
+                              }}
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-
-                {/* SKU и категория */}
-                {(product.sku || product.category) && (
-                  <div style={{
-                    display: 'flex',
-                    gap: '8px',
-                    marginBottom: '12px',
-                    fontSize: '12px',
-                    color: 'var(--gray-500)'
-                  }}>
-                    {product.sku && (
-                      <span style={{
-                        background: 'var(--gray-100)',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        fontFamily: 'monospace'
-                      }}>
-                        SKU: {product.sku}
-                      </span>
-                    )}
-                    {product.category && (
-                      <span style={{
-                        background: 'var(--gray-100)',
-                        padding: '4px 8px',
-                        borderRadius: '6px'
-                      }}>
-                        {product.category}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Кнопки действий */}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => handleEditProduct(product)}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      background: 'var(--accent)',
-                      color: 'var(--white)',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-1px)'
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(7, 185, 129, 0.3)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)'
-                      e.currentTarget.style.boxShadow = 'none'
-                    }}
-                  >
-                    ✏️ Изменить
-                  </button>
-
-                  <button
-                    onClick={() => handleDeleteProduct(product)}
-                    style={{
-                      padding: '8px 12px',
-                      background: 'var(--gray-100)',
-                      color: 'var(--gray-700)',
-                      border: '1px solid var(--gray-300)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: '600',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#fee2e2'
-                      e.currentTarget.style.color = '#dc2626'
-                      e.currentTarget.style.borderColor = '#fca5a5'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'var(--gray-100)'
-                      e.currentTarget.style.color = 'var(--gray-700)'
-                      e.currentTarget.style.borderColor = 'var(--gray-300)'
-                    }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-                </div>
-              </div>
-            ))
+              )
+            })
           })()}
         </div>
       ) : (
@@ -1119,6 +1269,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
           onConfirm={confirmDeleteProduct}
         />
       )}
+      </div>
     </div>
   )
 }

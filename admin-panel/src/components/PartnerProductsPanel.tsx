@@ -141,7 +141,7 @@ export default function PartnerProductsPanel({ partnerId, partnerName, onError }
         <button className="button" onClick={handleRefreshClick}>Обновить товары</button>
       </div>
       {creating && (
-        <ProductForm onCancel={() => setCreating(false)} onSave={handleSave} initial={{}} />
+        <ProductForm onCancel={() => setCreating(false)} onSave={handleSave} />
       )}
       {editing && (
         <ProductForm

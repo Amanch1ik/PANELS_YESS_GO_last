@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import SkeletonGrid from '../components/Skeleton'
 import { useNavigate } from 'react-router-dom'
 import { fetchPartners, createPartner, updatePartner, deletePartner, uploadPartnerImage,
   fetchPartnerProducts, createPartnerProduct, deletePartnerProduct, uploadPartnerProductImage, updatePartnerProduct, testPartnerAPI, clearApiCache } from '../api/client'
@@ -20,6 +21,45 @@ const styles = `
   .partner-card {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     animation: fadeIn 0.5s ease-out;
+  }
+
+  /* Category pills */
+  .category-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .pill {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--gray-50);
+    color: var(--gray-700);
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 140ms ease;
+    user-select: none;
+  }
+  .pill:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(15,23,42,0.06) }
+  .pill.active {
+    background: var(--primary);
+    color: var(--gray-900);
+    border-color: rgba(0,0,0,0.04);
+  }
+  .filter-row {
+    display:flex;
+    gap:12px;
+    align-items:center;
+    margin: 16px 0 20px 0;
+    flex-wrap:wrap;
+  }
+  .search-input {
+    padding:8px 12px;
+    border-radius:10px;
+    border:1px solid var(--gray-200);
+    background:var(--white);
+    min-width:220px;
   }
 
   .partner-card:hover {
@@ -103,6 +143,8 @@ type Partner = {
   is_active?: boolean
   is_verified?: boolean
   price?: number
+  category?: string
+  categories?: string[] | string
 }
 
 export default function Partners() {
@@ -116,6 +158,9 @@ export default function Partners() {
   const [clearingCache, setClearingCache] = useState(false)
   const navigate = useNavigate()
   const [credModalPartner, setCredModalPartner] = useState<Partner | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('Все')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [showCategoryMenu, setShowCategoryMenu] = useState<boolean>(false)
 
 
   const load = async () => {
@@ -139,6 +184,46 @@ export default function Partners() {
   useEffect(() => {
     load()
   }, [])
+
+  const categories = React.useMemo(() => {
+    const map = new Map<string, string>()
+    const addCandidate = (raw: any) => {
+      if (!raw && raw !== 0) return
+      if (Array.isArray(raw)) {
+        raw.forEach(r => addCandidate(r))
+        return
+      }
+      const s = String(raw).trim()
+      if (!s) return
+      // split common delimiters
+      const parts = s.split(/[,;/|]+/).map(x => x.trim()).filter(Boolean)
+      parts.forEach(p => {
+        const key = p.toLowerCase()
+        if (!map.has(key)) map.set(key, p)
+      })
+    }
+    partners.forEach(p => addCandidate(p.category || (p.categories || null)))
+    return ['Все', ...Array.from(map.values()).sort((a, b) => a.localeCompare(b, 'ru'))]
+  }, [partners])
+
+  const filteredPartners = React.useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim()
+    const matchCategory = (p: Partner) => {
+      if (!selectedCategory || selectedCategory === 'Все') return true
+      const raw = p.category || (p as any).categories || ''
+      let list: string[] = []
+      if (Array.isArray(raw)) list = raw.map(String)
+      else list = String(raw || '').split(/[,;/|]+/).map(x => x.trim()).filter(Boolean)
+      const normalized = list.map(x => x.toLowerCase())
+      return normalized.includes(String(selectedCategory).toLowerCase())
+    }
+    return partners.filter(p => {
+      if (!matchCategory(p)) return false
+      if (!q) return true
+      const hay = `${p.name || ''} ${p.description || ''}`.toLowerCase()
+      return hay.indexOf(q) !== -1
+    })
+  }, [partners, selectedCategory, searchQuery])
 
   // Robust partner image extractor — supports strings, arrays and nested objects
   const getPartnerImage = (partnerData: any): string | null => {
@@ -370,22 +455,8 @@ export default function Partners() {
 
       {/* Сообщения о состоянии */}
       {loading && (
-        <div style={{
-          textAlign: 'center',
-          padding: '40px',
-          color: 'var(--gray-600)',
-          fontSize: '16px'
-        }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '3px solid var(--gray-300)',
-            borderTop: '3px solid var(--accent)',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px auto'
-          }}></div>
-          Загрузка партнеров...
+        <div style={{ padding: 12 }}>
+          <SkeletonGrid count={4} columns={2} itemHeight={100} />
         </div>
       )}
 
@@ -405,7 +476,90 @@ export default function Partners() {
         </div>
       )}
 
-      {!loading && partners.length === 0 && !error && (
+      {/* Filter controls */}
+      {!loading && partners.length > 0 && (
+        <div className="filter-row" style={{ alignItems: 'center' }}>
+          {/* Button to open category menu (left of New partner) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
+            <button
+              onClick={() => setShowCategoryMenu(v => !v)}
+              aria-haspopup="true"
+              aria-expanded={showCategoryMenu}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--gray-200)',
+                background: 'var(--white)',
+                color: 'var(--gray-900)',
+                cursor: 'pointer',
+                fontWeight: 700
+              }}
+            >
+              Категории ▾
+            </button>
+            {/* Dropdown with categories */}
+            {showCategoryMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                padding: 12,
+                background: 'var(--white)',
+                borderRadius: 8,
+                boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+                zIndex: 50,
+                minWidth: 240,
+                maxWidth: 'min(480px, 90vw)',
+                overflowY: 'auto',
+                maxHeight: '40vh',
+                boxSizing: 'border-box'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => setShowCategoryMenu(false)}
+                      aria-label="Закрыть список категорий"
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontWeight: 700, padding: '4px 8px' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {categories.map(cat => (
+                      <div
+                        key={cat}
+                        onClick={() => { setSelectedCategory(cat); setShowCategoryMenu(false) }}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setSelectedCategory(cat); setShowCategoryMenu(false) } }}
+                        className={`pill ${selectedCategory === cat ? 'active' : ''}`}
+                      >
+                        {cat}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* visible category pills removed; use "Категории ▾" dropdown instead */}
+          <input
+            className="search-input"
+            placeholder="Поиск по имени или описанию..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Поиск партнеров"
+          />
+          <button
+            onClick={() => { setSelectedCategory('Все'); setSearchQuery('') }}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--gray-200)', background: 'transparent', cursor: 'pointer', color: 'var(--gray-900)' }}
+          >
+            Сбросить
+          </button>
+        </div>
+      )}
+
+      {!loading && filteredPartners.length === 0 && partners.length > 0 && !error && (
         <div style={{
           textAlign: 'center',
           padding: '60px 20px',
@@ -429,8 +583,8 @@ export default function Partners() {
           }}>
             🏪
           </div>
-          <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Нет партнеров</div>
-            <div style={{ fontSize: '14px', opacity: 0.7, marginBottom: '20px' }}>Партнеры еще не добавлены в систему</div>
+          <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Партнёров не найдено</div>
+            <div style={{ fontSize: '14px', opacity: 0.7, marginBottom: '20px' }}>Попробуйте изменить фильтр или очистить поиск</div>
           <button
             onClick={handleCreate}
             style={{
@@ -450,14 +604,14 @@ export default function Partners() {
       )}
 
       {/* Сетка партнеров */}
-      {!loading && partners.length > 0 && (
+      {!loading && filteredPartners.length > 0 && (
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
           gap: '20px',
           marginBottom: '32px'
         }}>
-          {partners.map(p => (
+          {filteredPartners.map(p => (
             <div key={String(p.id)} className="partner-card" style={{
               background: 'var(--white)',
               borderRadius: '16px',
@@ -508,15 +662,44 @@ export default function Partners() {
                   }}>
                     {p.name}
                   </div>
-                  {p.description && (
-                    <div style={{
-                      color: 'var(--gray-600)',
-                      fontSize: '14px',
-                      lineHeight: '1.4'
-                    }}>
-                      {p.description}
-                    </div>
-                  )}
+                  {p.description && (() => {
+                    const getPreview = (text: string) => {
+                      if (!text) return ''
+                      const m = text.match(/.*?[.?!](\s|$)/)
+                      if (m && m[0] && m[0].trim().length > 0) return m[0].trim()
+                      // fallback to first 120 chars
+                      return text.length > 120 ? text.slice(0, 120).trim() + '...' : text
+                    }
+                    const preview = getPreview(p.description)
+                    const isTruncated = p.description.length > preview.length
+                    return (
+                      <div style={{ position: 'relative' }}>
+                        <div style={{
+                          color: 'var(--gray-600)',
+                          fontSize: '14px',
+                          lineHeight: '1.4',
+                          overflow: 'hidden',
+                          maxHeight: '3.0em',
+                          WebkitLineClamp: 2,
+                          display: '-webkit-box',
+                          WebkitBoxOrient: 'vertical'
+                        }}>
+                          {preview}
+                        </div>
+                        {isTruncated ? (
+                          <div style={{
+                            position: 'absolute',
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            height: '1.2em',
+                            background: 'linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0.9))',
+                            pointerEvents: 'none'
+                          }} />
+                        ) : null}
+                      </div>
+                    )
+                  })()}
                 </div>
               </div>
 

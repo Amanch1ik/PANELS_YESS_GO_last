@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import SkeletonGrid from '../components/Skeleton'
 import { useNavigate } from 'react-router-dom'
 import { fetchPartners, fetchUsers, fetchProducts, fetchPartnerProducts, fetchRecentActivities, clearApiCache } from '../api/client'
 import {
@@ -492,20 +493,10 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
 
   if (loading) {
     return (
-      <div className="container" style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '400px'
-      }}>
-        <div style={{
-          width: '50px',
-          height: '50px',
-          border: '4px solid var(--gray-300)',
-          borderTop: '4px solid var(--accent)',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
+      <div className="container" style={{ paddingTop: '0px' }}>
+        <div style={{ marginBottom: 20 }}>
+          <SkeletonGrid count={3} columns={3} itemHeight={120} />
+        </div>
       </div>
     )
   }
@@ -976,7 +967,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
               // keep as inline IIFE to avoid adding new top-level hooks/vars
               // will be used by subsequent conditional rendering below via `recentList`
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const recentList: any = Array.isArray(recentActivities) ? recentActivities : (recentActivities?.items || recentActivities?.data || [])
+              const recentList: any = Array.isArray(recentActivities) ? recentActivities : ((recentActivities as any)?.items || (recentActivities as any)?.data || [])
               ;(recentList as any).__isRecentList = true
               return null
             })()}
@@ -987,7 +978,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
               <div style={{ padding: 12, textAlign: 'center', color: '#ef4444' }}>{recentError}</div>
             )}
             {/* @ts-ignore - use recentList normalized above */}
-            {!recentLoading && !recentError && (Array.isArray(recentActivities) ? recentActivities.length === 0 : ((recentActivities?.items || recentActivities?.data || []).length === 0)) && (
+            {!recentLoading && !recentError && (Array.isArray(recentActivities) ? recentActivities.length === 0 : (((recentActivities as any)?.items || (recentActivities as any)?.data || []).length === 0)) && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 8 }}>
                   <div>
@@ -1033,16 +1024,16 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
             )}
 
             {/* @ts-ignore - use normalized recentList for rendering */}
-            {!recentLoading && !recentError && (Array.isArray(recentActivities) ? recentActivities.length > 0 : ((recentActivities?.items || recentActivities?.data || []).length > 0)) && (
+            {!recentLoading && !recentError && (Array.isArray(recentActivities) ? recentActivities.length > 0 : (((recentActivities as any)?.items || (recentActivities as any)?.data || []).length > 0)) && (
               VirtualListComp ? (
                 <VirtualListComp
                   height={260}
-                  itemCount={(Array.isArray(recentActivities) ? recentActivities.length : (recentActivities?.items || recentActivities?.data || []).length)}
+                  itemCount={(Array.isArray(recentActivities) ? recentActivities.length : (((recentActivities as any)?.items || (recentActivities as any)?.data || []).length))}
                   itemSize={72}
                   width={'100%'}
                 >
                   {({ index, style }: { index: number; style: any }) => {
-                    const listArr = Array.isArray(recentActivities) ? recentActivities : (recentActivities?.items || recentActivities?.data || [])
+                    const listArr = Array.isArray(recentActivities) ? recentActivities : ((recentActivities as any)?.items || (recentActivities as any)?.data || [])
                     const item = listArr[index]
                     const text = item.action || item.title || item.message || item.name || 'Событие'
                     const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
@@ -1084,7 +1075,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
                 </VirtualListComp>
               ) : (
                 <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(Array.isArray(recentActivities) ? recentActivities : (recentActivities?.items || recentActivities?.data || [])).map((item: any, index: number) => {
+                  {(Array.isArray(recentActivities) ? recentActivities : ((recentActivities as any)?.items || (recentActivities as any)?.data || [])).map((item: any, index: number) => {
                     const text = item.action || item.title || item.message || item.name || 'Событие'
                     const dateVal = item.created_at || item.createdAt || item.date || item.timestamp || item.time
                     const timeDisplay = (() => {

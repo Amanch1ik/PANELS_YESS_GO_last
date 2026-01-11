@@ -182,8 +182,17 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
         return
       }
       setAuthToken(token)
-      onLogin()
-      pushToast({ type: 'success', title: 'Вход выполнен', message: 'Успешный вход в систему' })
+      // Immediately navigate to home to show app shell quickly while data loads
+      try {
+        pushToast({ type: 'success', title: 'Вход выполнен', message: 'Успешный вход в систему' })
+        // call onLogin for in-memory state, then do a hard navigation to ensure Router mounts quickly with token present
+        try { onLogin() } catch { /* ignore */ }
+        // use location replace to avoid keeping login in history
+        window.location.replace('/home')
+      } catch (e) {
+        // fallback: still call onLogin
+        try { onLogin() } catch {}
+      }
     } catch (err: any) {
       console.error('Login error details:', {
         status: err?.response?.status,
