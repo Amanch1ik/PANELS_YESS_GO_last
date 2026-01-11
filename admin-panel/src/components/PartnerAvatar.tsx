@@ -68,7 +68,9 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'var(--gradient-primary)'
+    background: 'var(--gradient-primary)',
+    border: '3px solid #D4AF37',
+    boxShadow: '0 4px 12px rgba(212,175,55,0.12)'
   }
 
   const imgStyle: React.CSSProperties = {

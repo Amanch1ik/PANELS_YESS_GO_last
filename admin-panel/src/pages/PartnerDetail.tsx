@@ -827,7 +827,7 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
                   }}>
                     <span style={{
                       background: 'var(--primary)',
-                      color: 'white',
+                      color: 'var(--gray-900)',
                       padding: '4px 12px',
                       borderRadius: '20px',
                       fontSize: '14px',
