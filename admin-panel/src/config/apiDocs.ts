@@ -32,6 +32,11 @@ export const API_DOCS_ENDPOINTS = {
     // Admin users endpoint
     list: '/admin/users'
   },
+  recentActivities: {
+    // set this to the correct endpoint on your backend if available
+    // examples: '/notifications', '/notifications/list', '/admin/notifications', '/activities'
+    list: '/admin/notifications'
+  }
 }
 
 

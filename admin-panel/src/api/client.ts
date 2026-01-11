@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { API_ENDPOINTS } from "../config/apiEndpoints"
 import { API_BASE_URL } from '../config/api'
+import { API_DOCS_ENDPOINTS } from '../config/apiDocs'
 
 // Decide axios baseURL similar to web-version repo:
 const isDev = (import.meta as any).env?.DEV
@@ -670,8 +671,19 @@ export async function fetchRecentActivities(limit: number = 10, params?: Record<
   }
 
   const promise = (async () => {
+    // If apiDocs defines a preferred recentActivities endpoint, try it first
+    const rawCandidatesFromDocs: string[] = []
+    try {
+      if (API_DOCS_ENDPOINTS && API_DOCS_ENDPOINTS.recentActivities && API_DOCS_ENDPOINTS.recentActivities.list) {
+        rawCandidatesFromDocs.push(API_DOCS_ENDPOINTS.recentActivities.list)
+      }
+    } catch (e) {
+      // ignore
+    }
+
     // Expanded candidate endpoints with common /list and /v1 variants
     const rawCandidates = [
+      ...rawCandidatesFromDocs,
       '/activities',
       '/activities/list',
       '/events',
@@ -691,7 +703,16 @@ export async function fetchRecentActivities(limit: number = 10, params?: Record<
       '/admin/messages/list'
     ]
 
-    for (const ep of rawCandidates) {
+    // De-duplicate while preserving order
+    const seen = new Set<string>()
+    const candidates = rawCandidates.filter(ep => {
+      const key = String(ep)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    for (const ep of candidates) {
       try {
         const query = { limit, ...(params || {}) }
         console.log('[RecentActivities] trying endpoint', ep, 'with', query)

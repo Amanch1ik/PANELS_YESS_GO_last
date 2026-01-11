@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { resolveAssetUrl, imageResource } from '../utils/assets'
 import { normalizePartner } from '../services/normalize'
 
@@ -87,29 +87,74 @@ export default function PartnerAvatar ({ partner, size = 80, innerCircle = 56, r
     color: 'var(--white)',
     fontSize: Math.max(14, Math.round(innerCircle / 2.5)),
     fontWeight: 700,
-    background: 'var(--gradient-primary)'
+    background: 'var(--gradient-primary)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center'
   }
 
   const firstLetter = (partner && (partner.name || partner.Name)) ? String((partner.name || partner.Name)[0]).toUpperCase() : 'P'
+  const [placeholderSrc, setPlaceholderSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Try to load a pre-generated placeholder (same-origin only)
+    if (!logoUrl) {
+      setPlaceholderSrc(null)
+      return
+    }
+    try {
+      const isSameOrigin = logoUrl.startsWith('/') || (typeof window !== 'undefined' && logoUrl.startsWith(window.location.origin))
+      if (!isSameOrigin) {
+        setPlaceholderSrc(null)
+        return
+      }
+      const placeholderCandidate = logoUrl.replace(/\.(jpe?g|png)$/i, '.placeholder.webp')
+      const img = new Image()
+      img.src = placeholderCandidate
+      img.onload = () => setPlaceholderSrc(placeholderCandidate)
+      img.onerror = () => setPlaceholderSrc(null)
+    } catch (e) {
+      setPlaceholderSrc(null)
+    }
+  }, [logoUrl])
 
   return (
     <div style={outerStyle} className="partner-avatar-wrapper">
-      <div style={circleStyle} className="partner-avatar-circle">
+      <div
+        style={{
+          ...circleStyle,
+          // if placeholder available, show it as background while real image loads
+          backgroundImage: placeholderSrc ? `url(${placeholderSrc})` : circleStyle.background
+        }}
+        className="partner-avatar-circle"
+      >
         {logoUrl ? (
-          <img
-            src={logoUrl}
-            alt={partner?.name || partner?.Name || 'partner'}
-            loading="lazy"
-            decoding="async"
-            style={imgStyle}
-            onLoad={() => setLoaded(true)}
-            onError={() => setLoaded(false)}
-          />
+          <picture>
+            {/* Prefer local/webp variant when available */}
+            { (logoUrl.endsWith('.png') || logoUrl.endsWith('.jpg') || logoUrl.endsWith('.jpeg')) && (logoUrl.startsWith('/') || (typeof window !== 'undefined' && logoUrl.startsWith(window.location.origin))) ? (
+              <source srcSet={logoUrl.replace(/\.(jpe?g|png)$/i, '.webp')} type="image/webp" />
+            ) : null }
+            <img
+              src={logoUrl}
+              alt={partner?.name || partner?.Name || 'partner'}
+              loading="eager"
+              decoding="async"
+              /* use lowercase attribute to avoid React warning in dev */
+              fetchpriority="high"
+              width={innerCircle}
+              height={innerCircle}
+              style={imgStyle}
+              onLoad={() => setLoaded(true)}
+              onError={() => setLoaded(false)}
+            />
+          </picture>
         ) : null}
 
-        <div style={placeholderStyle} className="partner-logo-placeholder">
-          {firstLetter}
-        </div>
+        {/* Placeholder: either blurred image or letter */}
+        {!placeholderSrc ? (
+          <div style={placeholderStyle} className="partner-logo-placeholder">
+            {firstLetter}
+          </div>
+        ) : null}
       </div>
     </div>
   )
