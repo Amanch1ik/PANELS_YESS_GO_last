@@ -582,8 +582,8 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
             height: '80px',
             borderRadius: '16px',
             overflow: 'hidden',
-            boxShadow: '0 8px 16px rgba(0,0,0,0.15)',
-            border: '3px solid var(--white)',
+            boxShadow: 'none',
+            border: 'none',
             flexShrink: 0
           }}>
             {(() => {
@@ -610,9 +610,13 @@ export default function PartnerDetail({ onError }: { onError?: (msg: string) => 
             {partner.description && (
               <p style={{
                 margin: '0 0 16px 0',
-                fontSize: '16px',
+                fontSize: '14px',
                 color: 'var(--gray-600)',
-                lineHeight: '1.5'
+                lineHeight: '1.4',
+                textAlign: 'justify',
+                hyphens: 'auto',
+                maxWidth: '100%',
+                marginBottom: '12px'
               }}>
                 {partner.description}
               </p>
