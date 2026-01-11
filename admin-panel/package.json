@@ -9,6 +9,8 @@
     "start:proxy": "node server/proxy.js",
     "clean": "rimraf dist .vite .cache",
     "build": "npm run clean && vite build",
+    "optimize:assets": "npx svgo -f public/icons -o public/icons || true && npx imagemin-cli \"public/**/*.{png,jpg,jpeg,svg}\" --out-dir=public || true",
+    "analyze:bundle": "npx vite build -- --visualize || true",
     "preview": "vite preview"
   },
   "dependencies": {

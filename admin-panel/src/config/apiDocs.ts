@@ -7,7 +7,7 @@ export const API_DOCS_ENDPOINTS = {
     oauthToken: '/oauth/token'
   },
   partners: {
-    list: '/partners',
+    list: '/partners/list',
     byId: (id: string|number) => `/partners/${id}`,
     products: {
       list: (partnerId: string|number) => `/partners/${partnerId}/products`,
@@ -18,8 +18,9 @@ export const API_DOCS_ENDPOINTS = {
     }
   },
   products: {
-    list: '/products',
-    create: '/products',
+    // use promotions endpoint for admin product listing when backend exposes promotions
+    list: '/promotions',
+    create: '/promotions',
     update: (id: string|number) => `/products/${id}`,
     delete: (id: string|number) => `/products/${id}`,
     images: (id: string|number) => `/products/${id}/images`
@@ -28,7 +29,8 @@ export const API_DOCS_ENDPOINTS = {
     list: '/messages'
   },
   users: {
-    list: '/users'
+    // Admin users endpoint
+    list: '/admin/users'
   },
 }
 

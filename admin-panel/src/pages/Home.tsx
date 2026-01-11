@@ -186,6 +186,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
   const [recentError, setRecentError] = useState<string | null>(null)
   const [reloadSignal, setReloadSignal] = useState(0)
   const navigate = useNavigate()
+  const loadStatsInProgressRef = useRef<boolean>(false)
 
   // Auto-hide welcome message after 7 seconds with smooth exit animation (longer reading time)
   useEffect(() => {
@@ -205,6 +206,12 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
 
   useEffect(() => {
     const loadStats = async () => {
+      // Prevent overlapping runs (in-flight) even if effect retriggers
+      if (loadStatsInProgressRef.current) {
+        console.log('⏭️ loadStats already in progress, skipping duplicate invocation')
+        return
+      }
+      loadStatsInProgressRef.current = true
       // Защита от двойного вызова при React StrictMode в dev: если недавно уже запускали, пропускаем
       if (typeof window !== 'undefined') {
         const KEY = '__yessgo_home_stats_loaded_at'
@@ -366,6 +373,7 @@ function Home({ onError }: { onError?: (msg: string) => void }) {
         }
       } finally {
         setLoading(false)
+        loadStatsInProgressRef.current = false
       }
     }
 

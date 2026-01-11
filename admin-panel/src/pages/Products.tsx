@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { fetchProducts, fetchPartners, fetchPartnerProducts, createProduct, updateProduct, deleteProduct, uploadProductImage } from '../api/client'
 import { FixedSizeList as VirtualList } from 'react-window'
 import ProductForm from '../components/ProductForm'
+import SkeletonGrid from '../components/Skeleton'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 // CSS анимации
@@ -217,9 +218,8 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
       )}
       <div className="card">
         {loading && (
-          <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <div style={{ fontSize: '24px', marginBottom: '16px' }}>⏳</div>
-            <div className="muted">Загрузка товаров...</div>
+          <div style={{ padding: 12 }}>
+            <SkeletonGrid count={6} columns={3} />
           </div>
         )}
         {error && (

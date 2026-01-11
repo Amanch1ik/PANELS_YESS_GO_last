@@ -27,6 +27,8 @@ type PartnerProduct = {
   imageUrl?: string
 }
 
+import SkeletonGrid from '../components/Skeleton'
+
 export default function PartnerProductsPanel({ partnerId, partnerName, onError }: PartnerProductsPanelProps) {
   const [products, setProducts] = useState<PartnerProduct[]>([])
   const [loading, setLoading] = useState(false)
@@ -127,7 +129,7 @@ export default function PartnerProductsPanel({ partnerId, partnerName, onError }
 
   return (
     <div className="card" style={{ padding: 8, marginTop: 8 }}>
-      {loading && <div className="muted" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Загрузка товаров...</div>}
+      {loading && <div style={{ padding: 8 }}><SkeletonGrid count={3} columns={1} /></div>}
       {error && <div style={{ color: '#ff7b7b' }}>{error}</div>}
       {!loading && products.length === 0 && <div className="muted" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Нет товаров для этого партнера</div>}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
