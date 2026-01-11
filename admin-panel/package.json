@@ -10,6 +10,7 @@
     "clean": "rimraf dist .vite .cache",
     "build": "npm run clean && vite build",
     "optimize:assets": "npx svgo -f public/icons -o public/icons || true && npx imagemin-cli \"public/**/*.{png,jpg,jpeg,svg}\" --out-dir=public || true",
+    "optimize:images": "node scripts/optimize-images.js",
     "analyze:bundle": "npx vite build -- --visualize || true",
     "preview": "vite preview"
   },
@@ -36,7 +37,9 @@
     "rimraf": "^5.0.0",
     "terser": "^5.44.1",
     "typescript": "^5.2.2",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "sharp": "^0.32.1",
+    "glob": "^10.3.3"
   },
   "dependenciesMeta": {
     "react-window": {
