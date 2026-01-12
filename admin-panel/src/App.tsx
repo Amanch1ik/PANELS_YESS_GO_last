@@ -1,6 +1,6 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
-import { setAuthToken, hasValidTokens } from './api/client'
+import { setAuthToken, hasValidTokens, hydrateCacheFromLocalStorage } from './api/client'
 import { NotificationProvider } from './contexts/NotificationContext'
 import Notifications from './components/Notifications'
 
@@ -13,9 +13,7 @@ const Messages = lazy(() => import('./pages/Messages'))
 const Users = lazy(() => import('./pages/Users'))
 const Products = lazy(() => import('./pages/Products'))
 const Transactions = lazy(() => import('./pages/Transactions'))
-const TransactionsSettings = lazy(() => import('./pages/TransactionsSettings'))
-const RBACPage = lazy(() => import('./pages/RBAC'))
-const AuditLogs = lazy(() => import('./pages/AuditLogs'))
+// RBAC and Audit pages temporarily hidden
 const MapPage = lazy(() => import('./pages/Map'))
 
 // Компонент загрузки
@@ -136,15 +134,6 @@ function Navigation() {
             border: isActive('/transactions') ? 'none' : '1px solid var(--gray-300)'
           }}>Транзакции</button>
         </Link>
-        <Link to="/transactions/settings" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/transactions/settings') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/transactions/settings') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/transactions/settings') ? 'none' : '1px solid var(--gray-300)',
-            fontSize: '12px',
-            padding: '8px 12px'
-          }}>⚙️</button>
-        </Link>
         <Link to="/messages" style={{ textDecoration: 'none' }}>
           <button className="button" style={{
             background: isActive('/messages') ? 'var(--accent)' : 'var(--gray-100)',
@@ -159,20 +148,10 @@ function Navigation() {
             border: isActive('/users') ? 'none' : '1px solid var(--gray-300)'
           }}>Пользователи</button>
         </Link>
-        <Link to="/rbac" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/rbac') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/rbac') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/rbac') ? 'none' : '1px solid var(--gray-300)'
-          }}>Права</button>
-        </Link>
-        <Link to="/audit" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/audit') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/audit') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/audit') ? 'none' : '1px solid var(--gray-300)'
-          }}>Аудит</button>
-        </Link>
+        {/*
+          RBAC and Audit links removed temporarily per request.
+          To restore, uncomment the Link blocks above and re-add routes below.
+        */}
         <button className="button" onClick={() => { setAuthToken(null); window.location.href = '/' }} style={{
           background: '#dc2626',
           color: 'var(--white)',
@@ -192,6 +171,12 @@ function AppContent({ onLogin }: { onLogin?: () => void }) {
   // Проверяем токен при каждом изменении маршрута
   useEffect(() => {
     console.log(`📍 Route changed to ${location.pathname}, validating tokens...`)
+    // Hydrate api client cache from localStorage so pages can render instantly with cached data
+    try {
+      hydrateCacheFromLocalStorage()
+    } catch (e) {
+      // no-op
+    }
     if (!hasValidTokens()) {
       console.warn('🔐 Invalid or missing tokens, redirecting to login...')
       // Clear any invalid tokens
@@ -226,11 +211,9 @@ function AppContent({ onLogin }: { onLogin?: () => void }) {
           <Route path="/map" element={<MapPage onError={onError} />} />
           <Route path="/products" element={<Products onError={onError} />} />
           <Route path="/transactions" element={<Transactions onError={onError} />} />
-          <Route path="/transactions/settings" element={<TransactionsSettings />} />
           <Route path="/messages" element={<Messages onError={onError} />} />
           <Route path="/users" element={<Users onError={onError} />} />
-          <Route path="/rbac" element={<RBACPage />} />
-          <Route path="/audit" element={<AuditLogs />} />
+          {/* RBAC and Audit routes removed temporarily */}
         </Routes>
       </Suspense>
     </>

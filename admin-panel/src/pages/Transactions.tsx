@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import SkeletonGrid from '../components/Skeleton'
-import { fetchTransactions, getUser } from '../api/client'
+import { fetchTransactions, getUser, setGlobalRateLimit, isGloballyRateLimited, scheduleBackgroundFetch, fetchUsers, fetchPartners } from '../api/client'
 import TransactionDetailModal from '../components/TransactionDetailModal'
+
+// Session-wide cache for enriched user data to avoid repeated enrichment attempts
+const userEnrichmentCache: Map<string | number, any> = new Map()
 
 type Transaction = {
   id: string | number
@@ -28,6 +31,26 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  // Hydrate UI immediately from localStorage cache to reduce perceived load time
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('yessgo_cache_v1_transactions')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        const payload = parsed && parsed.data ? parsed.data : parsed
+        const items = Array.isArray(payload) ? payload : (payload.items || payload.data || [])
+        const totalCount = payload?.total || payload?.count || null
+        if (items && items.length > 0) {
+          // show cached items immediately (without toggling loading)
+          setTransactions(items)
+          setTotal(totalCount)
+          console.log(`Hydrated Transactions UI from localStorage: ${items.length} items`)
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+  }, [])
 
   // Helper functions for user display
   const getUserDisplayName = (user: any): string => {
@@ -97,9 +120,137 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
     return ''
   }
 
+  const getPartnerDisplayName = (p: any): string => {
+    if (!p) return '—'
+    if (typeof p === 'string' || typeof p === 'number') return String(p)
+    if (p.name) return p.name
+    if (p.title) return p.title
+    if (p.partnerName) return p.partnerName
+    if (p.partner) return typeof p.partner === 'string' ? p.partner : (p.partner.name || p.partner.title || String(p.partner.id || '—'))
+    if (p.merchant) return typeof p.merchant === 'string' ? p.merchant : (p.merchant.name || String(p.merchant.id || '—'))
+    if (p.store) return typeof p.store === 'string' ? p.store : (p.store.name || String(p.store.id || '—'))
+    if (p.vendor) return typeof p.vendor === 'string' ? p.vendor : (p.vendor.name || String(p.vendor.id || '—'))
+    if (p.partner_id) return String(p.partner_id)
+    if (p.merchant_id) return String(p.merchant_id)
+    return '—'
+  }
+
+  // Function to enrich transactions with partner data (throttled to avoid 429)
+  const enrichTransactionsWithPartnerData = async (transactions: any[]): Promise<any[]> => {
+    const partnerIds = new Set<string | number>()
+
+    transactions.forEach(tx => {
+      if (tx.partner_id) partnerIds.add(tx.partner_id)
+      if (tx.merchant_id) partnerIds.add(tx.merchant_id)
+      if (tx.store_id) partnerIds.add(tx.store_id)
+      if (typeof tx.partner === 'string' || typeof tx.partner === 'number') partnerIds.add(tx.partner)
+      if (typeof tx.merchant === 'string' || typeof tx.merchant === 'number') partnerIds.add(tx.merchant)
+      if (typeof tx.store === 'string' || typeof tx.store === 'number') partnerIds.add(tx.store)
+    })
+
+    if (partnerIds.size === 0) return transactions
+
+    console.log('Enriching partner data for IDs (throttled):', Array.from(partnerIds))
+
+    const partnerDataMap = new Map<string | number, any>()
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms))
+
+    // Try batch fetch first
+    try {
+      const idsCsv = Array.from(partnerIds).join(',')
+      let batchPartners = await fetchPartners({ ids: idsCsv })
+      if ((!batchPartners || (Array.isArray(batchPartners) && batchPartners.length === 0)) && Array.from(partnerIds).length > 0) {
+        batchPartners = await fetchPartners({ ids: Array.from(partnerIds) })
+      }
+      if (Array.isArray(batchPartners) && batchPartners.length > 0) {
+        for (const p of batchPartners) {
+          const pid = p?.id || p?.partner_id || p?.merchant_id
+          if (pid) partnerDataMap.set(pid, p)
+        }
+        console.log('Batch fetched partners:', Array.from(partnerDataMap.keys()))
+      }
+    } catch (e) {
+      console.warn('Batch fetch for partners failed, falling back to individual requests', e)
+    }
+
+    for (const id of Array.from(partnerIds)) {
+      try {
+        if (partnerDataMap.has(id)) continue
+        const p = await (await import('../api/client')).getPartner(id)
+        partnerDataMap.set(id, p)
+        console.log(`Fetched partner ${id}`, p && (p.name || p.title || p.partnerName || p.id))
+      } catch (err: any) {
+        const status = err?.response?.status
+        console.warn(`Failed to fetch partner ${id}:`, err)
+        if (status === 429) {
+          // parse retry and set global rate limit, schedule background refresh
+          try {
+            const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+            const n = parseInt(String(retryAfterHeader).replace(/\D/g, ''), 10)
+            const retrySeconds = n > 0 ? n : 60
+            setGlobalRateLimit(retrySeconds)
+            scheduleBackgroundFetch('partners', () => fetchPartners(), retrySeconds)
+            console.warn(`Received 429 for partner ${id}, backing off for ${retrySeconds}s`)
+          } catch (e) {
+            console.warn('Failed to handle 429 for partner fetch', e)
+          }
+          partnerDataMap.set(id, { id, name: `Партнёр #${id}` })
+          break
+        } else {
+          partnerDataMap.set(id, { id, name: `Партнёр #${id}` })
+        }
+      }
+      // throttle
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(300)
+    }
+
+    return transactions.map(tx => {
+      const candidate = tx.partner || tx.merchant || tx.store || null
+      let id: string | number | null = null
+      if (tx.partner_id) id = tx.partner_id
+      else if (tx.merchant_id) id = tx.merchant_id
+      else if (tx.store_id) id = tx.store_id
+      else if (typeof tx.partner === 'string' || typeof tx.partner === 'number') id = tx.partner
+      else if (typeof tx.merchant === 'string' || typeof tx.merchant === 'number') id = tx.merchant
+      else if (typeof tx.store === 'string' || typeof tx.store === 'number') id = tx.store
+
+      if (id && partnerDataMap.has(id)) {
+        return { ...tx, partner: partnerDataMap.get(id) }
+      }
+      // If partner object already present, ensure normalized name exists
+      if (candidate && typeof candidate === 'object' && (candidate.name || candidate.title || candidate.partnerName)) {
+        return tx
+      }
+      return tx
+    })
+  }
+
+  const getReferenceValue = (tx: any): string => {
+    if (!tx) return '—'
+    const candidates = [
+      tx.reference,
+      tx.ref,
+      tx.reference_id,
+      tx.reference_number,
+      tx.external_id,
+      tx.transaction_ref,
+      tx.tx_ref,
+      tx.payment_reference,
+      tx.payment_ref
+    ]
+    for (const c of candidates) {
+      if (c !== undefined && c !== null && String(c).trim() !== '') return String(c)
+    }
+    // Some APIs nest reference under data or attributes
+    if (tx.data && (tx.data.reference || tx.data.ref)) return String(tx.data.reference || tx.data.ref)
+    if (tx.attributes && (tx.attributes.reference || tx.attributes.ref)) return String(tx.attributes.reference || tx.attributes.ref)
+    return '—'
+  }
+
   // Function to enrich transactions with user data
   const enrichTransactionsWithUserData = async (transactions: any[]): Promise<any[]> => {
-    const userIds = new Set<string | number>()
+      const userIds = new Set<string | number>()
 
     // Collect all unique user IDs that need enrichment
     transactions.forEach(tx => {
@@ -115,30 +266,135 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
       return transactions
     }
 
-    console.log('Enriching user data for IDs:', Array.from(userIds))
+    console.log('Enriching user data for IDs (throttled):', Array.from(userIds))
 
-    // Try to fetch user data for collected IDs
+    // Local in-memory cache to avoid duplicate requests during this session
     const userDataMap = new Map<string | number, any>()
-    const fetchPromises = Array.from(userIds).map(async (userId) => {
+    // Pre-seed from session cache to avoid re-fetching ids we've already enriched
+    for (const id of Array.from(userIds)) {
+      if (userEnrichmentCache.has(id)) {
+        userDataMap.set(id, userEnrichmentCache.get(id))
+      }
+    }
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms))
+
+    const parseRetry = (headerValue: any): number => {
+      if (!headerValue) return 60
       try {
+        const v = String(headerValue).trim().toLowerCase()
+        if (v.endsWith('s')) return Math.max(1, parseInt(v.slice(0, -1), 10) || 60)
+        if (v.endsWith('m')) return Math.max(1, (parseInt(v.slice(0, -1), 10) || 1) * 60)
+        const n = parseInt(v, 10)
+        if (!isNaN(n)) return Math.max(1, n)
+      } catch (e) {}
+      return 60
+    }
+
+    // Sequentially fetch users with delay and 429-aware backoff
+    if (isGloballyRateLimited()) {
+      console.warn('Global rate limit active, skipping user enrichment')
+      return transactions
+    }
+
+    // Try batch fetch first (many APIs support ids param as CSV or array)
+    try {
+      // Seed from persistent localStorage cache if available to avoid network calls
+      try {
+        const raw = localStorage.getItem('yessgo_cache_v1_users')
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          const payload = parsed && parsed.data ? parsed.data : parsed
+          // payload might be array or object
+          if (Array.isArray(payload)) {
+            for (const u of payload) {
+              const uid = u?.id || u?.user_id || u?.userId || u?.customer_id || u?.customerId
+              if (uid && !userDataMap.has(uid)) userDataMap.set(uid, u)
+            }
+          } else if (payload && typeof payload === 'object') {
+            // if it's an object with keys as ids
+            if (Array.isArray(payload.items)) {
+              for (const u of payload.items) {
+                const uid = u?.id || u?.user_id || u?.userId || u?.customer_id || u?.customerId
+                if (uid && !userDataMap.has(uid)) userDataMap.set(uid, u)
+              }
+            } else {
+              // assume mapping
+              Object.keys(payload).forEach(k => {
+                try {
+                  const u = payload[k]
+                  const uid = u?.id || u?.user_id || u?.userId || k
+                  if (uid && !userDataMap.has(uid)) userDataMap.set(uid, u)
+                } catch (e) {}
+              })
+            }
+          }
+        }
+      } catch (e) {
+        // ignore malformed local cache
+      }
+
+      const idsCsv = Array.from(userIds).join(',')
+      let batchUsers = await fetchUsers({ ids: idsCsv })
+      if ((!batchUsers || (Array.isArray(batchUsers) && batchUsers.length === 0)) && Array.from(userIds).length > 0) {
+        // try as array param
+        batchUsers = await fetchUsers({ ids: Array.from(userIds) })
+      }
+      // batchUsers can be object wrapper; normalize to array
+      if (batchUsers && !Array.isArray(batchUsers) && (batchUsers.items || batchUsers.data)) {
+        batchUsers = Array.isArray(batchUsers.items) ? batchUsers.items : batchUsers.data
+      }
+      if (Array.isArray(batchUsers) && batchUsers.length > 0) {
+        for (const u of batchUsers) {
+          const uid = u?.id || u?.user_id || u?.userId || u?.customer_id || u?.customerId
+          if (uid) userDataMap.set(uid, u)
+        }
+        console.log('Batch fetched users:', Array.from(userDataMap.keys()))
+      }
+    } catch (e) {
+      // batch fetch failed or not supported — fallback to sequential
+      console.warn('Batch fetch for users failed, falling back to individual requests', e)
+    }
+
+    for (const userId of Array.from(userIds)) {
+      try {
+        if (userDataMap.has(userId)) continue
+        // Try cached getUser
         const userData = await getUser(userId)
         userDataMap.set(userId, userData)
+        try { userEnrichmentCache.set(userId, userData) } catch (e) {}
         console.log(`Fetched user data for ID ${userId}:`, userData)
-      } catch (error) {
+        // polite small delay
+        // eslint-disable-next-line no-await-in-loop
+        await sleep(300)
+      } catch (error: any) {
+        const status = error?.response?.status
         console.warn(`Failed to fetch user data for ID ${userId}:`, error)
-        // Create fallback user object
-        userDataMap.set(userId, {
-          id: userId,
-          name: `Пользователь #${userId}`,
-          fallback: true
-        })
+        if (status === 429) {
+          const retryAfterHeader = error?.response?.data?.retry_after || error?.response?.headers?.['retry-after']
+          const retrySeconds = parseRetry(retryAfterHeader)
+          console.warn(`Received 429 for user ${userId}, backing off for ${retrySeconds}s`)
+          // mark global rate limit and schedule background refresh for users
+          try {
+            setGlobalRateLimit(retrySeconds)
+            scheduleBackgroundFetch('users', () => fetchUsers(), retrySeconds)
+          } catch (e) {
+            console.warn('Failed to schedule background refresh for users', e)
+          }
+          const fallback = { id: userId, name: `Пользователь #${userId}`, fallback: true }
+          userDataMap.set(userId, fallback)
+          try { userEnrichmentCache.set(userId, fallback) } catch (e) {}
+          break
+        } else {
+          userDataMap.set(userId, { id: userId, name: `Пользователь #${userId}`, fallback: true })
+          // small delay before next
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(300)
+        }
       }
-    })
-
-    await Promise.allSettled(fetchPromises)
+    }
 
     // Enrich transactions with user data
-    return transactions.map(tx => {
+    const result = transactions.map(tx => {
       let userId: string | number | null = null
 
       if (tx.user_id) userId = tx.user_id
@@ -154,6 +410,47 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
 
       return tx
     })
+    // persist enriched users into localStorage for future page loads (non-blocking)
+    try {
+      // userDataMap is in scope of this function
+      // @ts-ignore
+      persistEnrichedUsersToLocalStorage(userDataMap)
+    } catch (e) {
+      // ignore
+    }
+    return result
+  }
+  // Persist enriched users from session cache/userDataMap to localStorage to avoid repeated enrichment across reloads
+  async function persistEnrichedUsersToLocalStorage(userDataMap: Map<string | number, any>) {
+    try {
+      const key = 'yessgo_cache_v1_users'
+      const raw = localStorage.getItem(key)
+      let existing: any[] = []
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw)
+          existing = parsed && parsed.data ? parsed.data : (parsed.items || parsed || [])
+          if (!Array.isArray(existing)) existing = []
+        } catch (e) {
+          existing = []
+        }
+      }
+
+      const mergedMap = new Map<any, any>()
+      for (const u of existing) {
+        const uid = u?.id || u?.user_id || u?.userId || u?.customer_id || u?.customerId
+        if (uid) mergedMap.set(String(uid), u)
+      }
+      for (const [id, u] of userDataMap) {
+        if (u) mergedMap.set(String(id), u)
+      }
+
+      const merged = Array.from(mergedMap.values())
+      localStorage.setItem(key, JSON.stringify({ data: merged, timestamp: Date.now() }))
+      console.log(`Persisted ${merged.length} enriched users to localStorage`)
+    } catch (e) {
+      console.warn('Failed to persist enriched users to localStorage', e)
+    }
   }
 
   const loadTransactions = async () => {
@@ -220,10 +517,17 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
       console.log(`Loaded ${items.length} transactions${totalCount ? ` (total: ${totalCount})` : ''}`)
 
       // Try to enrich user data if only IDs are available
-      const enrichedItems = await enrichTransactionsWithUserData(items)
-      console.log(`Enriched ${enrichedItems.length} transactions with user data`)
+      let enrichedItems = items
+      if (!isGloballyRateLimited()) {
+        enrichedItems = await enrichTransactionsWithUserData(items)
+        console.log(`Enriched ${enrichedItems.length} transactions with user data`)
+      } else {
+        console.log('Global rate limit active — skipping user enrichment')
+      }
+      const enrichedWithPartners = await enrichTransactionsWithPartnerData(enrichedItems)
+      console.log(`Enriched ${enrichedWithPartners.length} transactions with partner data`)
 
-      setTransactions(enrichedItems)
+      setTransactions(enrichedWithPartners)
       setTotal(totalCount)
 
       if (items.length === 0) {
@@ -494,16 +798,17 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
             <>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>ID</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Дата</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Пользователь</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Тип</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Сумма</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Статус</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Метод</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Reference</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--gray-700)' }}>Действия</th>
+                  <tr style={{ textAlign: 'left', borderBottom: '2px solid rgba(0,0,0,0.08)', background: 'var(--accent)' }}>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>ID</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Дата</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Пользователь</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Тип</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Сумма</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Статус</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Метод</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Партнёр</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Reference</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, color: 'var(--white)' }}>Действия</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -571,8 +876,11 @@ export default function Transactions({ onError }: { onError?: (msg: string) => v
                       <td style={{ padding: '12px 8px' }}>
                         {t.method || '—'}
                       </td>
+                      <td style={{ padding: '12px 8px' }}>
+                        {getPartnerDisplayName(t.partner || t.merchant || t.store || t.vendor || t.partner_id || t.merchant_id)}
+                      </td>
                       <td style={{ padding: '12px 8px', fontFamily: 'monospace', fontSize: '12px' }}>
-                        {t.reference || '—'}
+                        {getReferenceValue(t)}
                       </td>
                       <td style={{ padding: '12px 8px' }}>
                         <button

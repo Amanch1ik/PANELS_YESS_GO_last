@@ -18,7 +18,7 @@ function RBACInner() {
       <div className="card" style={{ maxWidth: 680 }}>
         <div style={{ marginBottom: 12 }}>
           <label style={{ color: 'var(--accent-light)', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Текущая роль:</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as any)} style={{ marginLeft: 8, padding: 6, background: 'rgba(7, 185, 129, 0.1)', border: '1px solid rgba(7, 185, 129, 0.3)', borderRadius: '6px', color: 'var(--white)' }}>
+          <select value={role} onChange={(e) => setRole(e.target.value as any)} style={{ marginLeft: 8, padding: 6, background: 'rgba(7, 185, 129, 0.08)', border: '1px solid rgba(7, 185, 129, 0.2)', borderRadius: '6px', color: 'var(--gray-900)', minWidth: 180 }}>
             {roles.map(r => <option key={r} value={r}>{r === 'admin' ? 'Администратор' : r === 'editor' ? 'Редактор' : 'Наблюдатель'}</option>)}
           </select>
         </div>

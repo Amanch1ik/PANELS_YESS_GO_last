@@ -58,6 +58,8 @@ export default function TransactionsSettings() {
     setColumns(prev => {
       const newSettings = { ...prev, [key]: !prev[key] }
       localStorage.setItem('transactions-columns', JSON.stringify(newSettings))
+      // Notify same-window listeners that settings changed
+      try { window.dispatchEvent(new Event('transactions-columns-changed')) } catch (e) {}
       return newSettings
     })
   }
@@ -65,6 +67,7 @@ export default function TransactionsSettings() {
   const resetToDefault = () => {
     setColumns(defaultColumns)
     localStorage.setItem('transactions-columns', JSON.stringify(defaultColumns))
+    try { window.dispatchEvent(new Event('transactions-columns-changed')) } catch (e) {}
   }
 
   const visibleCount = Object.values(columns).filter(Boolean).length
@@ -135,7 +138,7 @@ export default function TransactionsSettings() {
             Предпросмотр таблицы
           </h4>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', background: 'var(--white)', padding: 8, borderRadius: 8, border: '1px solid var(--gray-100)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--gray-200)' }}>
