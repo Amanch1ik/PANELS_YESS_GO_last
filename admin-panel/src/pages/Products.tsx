@@ -4,7 +4,32 @@ import { FixedSizeList as VirtualList } from 'react-window'
 import ProductForm from '../components/ProductForm'
 import SkeletonGrid from '../components/Skeleton'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { resolveAssetUrl } from '../utils/assets'
 
+function getProductImageSrc(p: any): string | undefined {
+  if (!p) return undefined
+  const candidates = [
+    p.imageUrl,
+    p.image,
+    p.image_url,
+    p.img,
+    p.thumbnail,
+    p.thumb,
+    p.picture,
+    p.photos && Array.isArray(p.photos) && p.photos[0],
+    p.images && Array.isArray(p.images) && (p.images[0]?.url || p.images[0]),
+    p.media && p.media[0],
+  ]
+  for (const c of candidates) {
+    if (!c) continue
+    if (typeof c === 'string' && c.trim()) return resolveAssetUrl(c) || c
+    if (typeof c === 'object') {
+      const url = c.url || c.path || c.src || c.image || c.file
+      if (url) return resolveAssetUrl(url) || url
+    }
+  }
+  return undefined
+}
 // CSS анимации
 const styles = ``
 
@@ -130,6 +155,9 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
     load()
   }, [])
 
+  const ITEM_HEIGHT = 112
+  const listHeight = Math.min(600, filteredProducts.length * ITEM_HEIGHT)
+
   const handleSave = async (payload: any, imageFile?: File | null) => {
     try {
       if (payload.id) {
@@ -251,50 +279,63 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
             <div style={{ marginBottom: 16, fontSize: 14, color: 'var(--gray-600)' }}>
               Показано {filteredProducts.length} из {products.length} продуктов
             </div>
-            <div style={{ height: Math.min(600, filteredProducts.length * 84), width: '100%' }}>
+            <div style={{ height: listHeight, width: '100%' }}>
               <VirtualList
-                height={Math.min(600, filteredProducts.length * 84)}
+                height={listHeight}
                 itemCount={filteredProducts.length}
-                itemSize={84}
+                itemSize={ITEM_HEIGHT}
                 width="100%"
               >
                 {({ index, style }) => {
                   const p = filteredProducts[index]
                   return (
-                    <div key={String(p.id)} style={{ ...style, padding: 12, borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <strong style={{ fontSize: 16 }}>{p.name}</strong>
-                          {p.category && (
-                            <span style={{
-                              background: 'var(--primary)',
-                              color: 'white',
-                              padding: '2px 6px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: 'bold'
-                            }}>
-                              {p.category}
-                            </span>
-                          )}
+                    <div key={String(p.id)} style={{ ...style, padding: 12, borderBottom: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', boxSizing: 'border-box' }}>
+                      <div style={{ flex: 1, paddingRight: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                          <div style={{ width: 56, height: 56, borderRadius: 8, overflow: 'hidden', background: 'var(--gray-50)', flexShrink: 0 }}>
+                            {(() => {
+                              const src = getProductImageSrc(p)
+                              if (src) return <img src={src} alt={String(p.name)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' }}>📦</div>
+                            })()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <strong style={{ fontSize: 16, color: 'var(--gray-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</strong>
+                              {p.category && (
+                                <span style={{
+                                  background: 'var(--primary)',
+                                  color: 'white',
+                                  padding: '4px 8px',
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  fontWeight: 700
+                                }}>
+                                  {p.category}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.description}
+                            </div>
+                          </div>
                         </div>
-                        <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>{p.description}</div>
-                        <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
+                        <div style={{ display: 'flex', gap: 12, fontSize: 13, marginTop: 8 }}>
                           {p.price !== undefined && p.price !== null && (
-                            <span className="muted">{Number(p.price).toLocaleString()} сом</span>
+                            <span className="muted" style={{ color: 'var(--gray-700)', fontWeight: 700 }}>{Number(p.price).toLocaleString()} сом</span>
                           )}
                           {p.stock !== undefined && <span className="muted">Запас: {p.stock}</span>}
                           {p.isAvailable !== undefined && (
                             <span style={{
                               color: p.isAvailable ? '#10b981' : '#ef4444',
-                              fontWeight: 'bold'
+                              fontWeight: 700
                             }}>
                               {p.isAvailable ? 'Доступен' : 'Недоступен'}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                         <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
                         <button className="button" onClick={() => handleDelete(p)} style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
                       </div>

@@ -16,6 +16,7 @@ const Transactions = lazy(() => import('./pages/Transactions'))
 const TransactionsSettings = lazy(() => import('./pages/TransactionsSettings'))
 const RBACPage = lazy(() => import('./pages/RBAC'))
 const AuditLogs = lazy(() => import('./pages/AuditLogs'))
+const MapPage = lazy(() => import('./pages/Map'))
 
 // Компонент загрузки
 const LoadingSpinner = () => (
@@ -113,6 +114,13 @@ function Navigation() {
             color: isActive('/partners') ? 'var(--white)' : 'var(--gray-700)',
             border: isActive('/partners') ? 'none' : '1px solid var(--gray-300)'
           }}>Партнеры</button>
+        </Link>
+        <Link to="/map" style={{ textDecoration: 'none' }}>
+          <button className="button" style={{
+            background: isActive('/map') ? 'var(--accent)' : 'var(--gray-100)',
+            color: isActive('/map') ? 'var(--white)' : 'var(--gray-700)',
+            border: isActive('/map') ? 'none' : '1px solid var(--gray-300)'
+          }}>Карта</button>
         </Link>
         <Link to="/products" style={{ textDecoration: 'none' }}>
           <button className="button" style={{
@@ -215,6 +223,7 @@ function AppContent({ onLogin }: { onLogin?: () => void }) {
           <Route path="/home" element={<Home onError={onError} />} />
           <Route path="/partners" element={<Partners />} />
           <Route path="/partners/:id" element={<PartnerDetail onError={onError} />} />
+          <Route path="/map" element={<MapPage onError={onError} />} />
           <Route path="/products" element={<Products onError={onError} />} />
           <Route path="/transactions" element={<Transactions onError={onError} />} />
           <Route path="/transactions/settings" element={<TransactionsSettings />} />
