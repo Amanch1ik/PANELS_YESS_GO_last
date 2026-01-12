@@ -108,7 +108,7 @@ export default function Map({ onError }: { onError?: (msg: string) => void }) {
       }
 
       // Wait for DG global to appear (loader may initialize asynchronously).
-      const waitForDG = async (timeout = 5000, interval = 200) => {
+      const waitForDG = async (timeout = 15000, interval = 250) => {
         let waited = 0
         while (waited < timeout) {
           const DGc = (window as any).DG
@@ -121,23 +121,28 @@ export default function Map({ onError }: { onError?: (msg: string) => void }) {
         return null
       }
 
-      let DG = await waitForDG(5000)
+      let DG = await waitForDG(15000)
       if (!DG) {
-        // Try a couple of retries with cache-bust in case loader was cached/failed to init
-        for (let attempt = 1; attempt <= 2 && !DG; attempt++) {
+        // Try several retries with cache-bust in case loader was cached/failed to init
+        for (let attempt = 1; attempt <= 4 && !DG; attempt++) {
           try {
             const src = `https://maps.api.2gis.ru/2.0/loader.js?pkg=full&_cb=${Date.now()}`
+            console.log(`[Map] retrying loader (attempt ${attempt}) src=${src}`)
             await loadScript(src)
             // eslint-disable-next-line no-await-in-loop
-            DG = await waitForDG(3000)
+            DG = await waitForDG(5000)
           } catch (err) {
-            // ignore and retry
+            console.warn('[Map] loader retry failed', err)
           }
         }
       }
 
       if (!DG) {
-        console.error('2GIS SDK не найден после загрузки')
+        // If DG appeared very shortly after waitForDG returned, prefer the global value
+        DG = (window as any).DG
+      }
+      if (!DG) {
+        console.error('2GIS SDK не найден после загрузки — попробуйте проверить доступ к https://maps.api.2gis.ru/loader.js и наличие API-ключа. window.DG=', (window as any).DG)
         return
       }
 
