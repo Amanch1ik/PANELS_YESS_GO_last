@@ -107,7 +107,35 @@ export default function Map({ onError }: { onError?: (msg: string) => void }) {
         return
       }
 
-      const DG = (window as any).DG
+      // Wait for DG global to appear (loader may initialize asynchronously).
+      const waitForDG = async (timeout = 5000, interval = 200) => {
+        let waited = 0
+        while (waited < timeout) {
+          const DGc = (window as any).DG
+          if (DGc) return DGc
+          // small sleep
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(res => setTimeout(res, interval))
+          waited += interval
+        }
+        return null
+      }
+
+      let DG = await waitForDG(5000)
+      if (!DG) {
+        // Try a couple of retries with cache-bust in case loader was cached/failed to init
+        for (let attempt = 1; attempt <= 2 && !DG; attempt++) {
+          try {
+            const src = `https://maps.api.2gis.ru/2.0/loader.js?pkg=full&_cb=${Date.now()}`
+            await loadScript(src)
+            // eslint-disable-next-line no-await-in-loop
+            DG = await waitForDG(3000)
+          } catch (err) {
+            // ignore and retry
+          }
+        }
+      }
+
       if (!DG) {
         console.error('2GIS SDK не найден после загрузки')
         return
