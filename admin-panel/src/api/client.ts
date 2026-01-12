@@ -3,10 +3,18 @@ import { API_ENDPOINTS } from "../config/apiEndpoints"
 import { API_BASE_URL } from '../config/api'
 import { API_DOCS_ENDPOINTS } from '../config/apiDocs'
 
-// Decide axios baseURL similar to web-version repo:
+// Decide axios baseURL:
 const isDev = (import.meta as any).env?.DEV
 const useDirectApi = (import.meta as any).env?.VITE_DIRECT_API === 'true'
-const baseURL = useDirectApi ? `${API_BASE_URL}/api` : (isDev ? '/api' : `${API_BASE_URL}/api`)
+
+/**
+ * ИСПРАВЛЕНИЕ:
+ * Теперь мы берем API_BASE_URL (https://api.yessgo.org)
+ * и добавляем путь /api/v1 только ОДИН раз.
+ */
+const baseURL = isDev
+  ? '/api'
+  : `${API_BASE_URL.replace(/\/$/, '')}/api/v1`;
 
 // Log resolved API base for easier debugging in dev/prod
 console.log('🔧 Resolved API config:', { API_BASE_URL, isDev, useDirectApi, baseURL })
@@ -19,20 +27,15 @@ const api = axios.create({
   timeout: 15000
 })
 
-// Request interceptor to validate tokens before making calls
+// Request interceptor
 api.interceptors.request.use(
   config => {
-    // Normalize URL to avoid double /api when baseURL already contains /api (dev proxy).
-    // Accept both '/api' and 'api' prefixes (with or without leading slash).
     try {
       const cfgUrl = config.url || ''
-      const base = String(api.defaults.baseURL || '')
-      // If base contains '/api' and url starts with optional '/api' or 'api', strip it.
-      if (base.toLowerCase().includes('/api') && /^\/?api(\/v1)?/i.test(cfgUrl)) {
-        console.log('[RequestInterceptor] normalize before:', { base, url: cfgUrl })
-        // Remove repeated leading '/api' or '/api/v1' sequences (one or more)
-        config.url = cfgUrl.replace(/^(\/?api(\/v1)?)+/i, '')
-        console.log('[RequestInterceptor] normalize after:', { base, url: config.url })
+      // Если путь начинается с /api или api, убираем его,
+      // так как он уже включен в baseURL (https://api.yessgo.org/api/v1)
+      if (/^\/?api/i.test(cfgUrl)) {
+        config.url = cfgUrl.replace(/^\/?api/i, '');
       }
     } catch (e) {
       // ignore
