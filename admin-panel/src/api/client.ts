@@ -228,7 +228,8 @@ const CACHE_DURATION = 5 * 60 * 1000 // 5 минут
 const cache = {
   partners: { data: null, timestamp: 0 },
   users: { data: null, timestamp: 0 },
-  products: { data: null, timestamp: 0 }
+  products: { data: null, timestamp: 0 },
+  transactions: { data: null, timestamp: 0 }
 }
 const STORAGE_PREFIX = 'yessgo_cache_v1_'
 // Кэш для товаров партнёров по id
@@ -272,6 +273,28 @@ function setCachedData(key: string, data: any) {
   }
 }
 
+// Hydrate in-memory cache from localStorage (synchronous, safe to call on startup)
+export function hydrateCacheFromLocalStorage() {
+  try {
+    const keys: Array<keyof typeof cache> = ['partners', 'users', 'products', 'transactions']
+    for (const k of keys) {
+      const raw = localStorage.getItem(`${STORAGE_PREFIX}${k}`)
+      if (!raw) continue
+      try {
+        const parsed = JSON.parse(raw)
+        if (parsed && parsed.timestamp && parsed.data !== undefined) {
+          cache[k] = { data: parsed.data, timestamp: parsed.timestamp }
+          console.log(`📦 Hydrated cache for ${k} from localStorage: ${Array.isArray(parsed.data) ? parsed.data.length : 'object'}`)
+        }
+      } catch (e) {
+        // ignore malformed entries
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ hydrateCacheFromLocalStorage failed', e)
+  }
+}
+
 export function clearApiCache() {
   console.log('🗑️ Очищаем кэш API')
   cache.partners = { data: null, timestamp: 0 }
@@ -294,6 +317,30 @@ export function clearApiCache() {
 
 // Helpers to handle 429 Retry-After and schedule background refreshes
 const scheduledRefreshes: Record<string, number | null> = {}
+
+// Endpoints that recently returned 404 — map to timestamp until which they should be skipped
+const disabledEndpoints: Record<string, number> = {}
+function disableEndpoint(endpoint: string, seconds: number = 300) {
+  try {
+    disabledEndpoints[endpoint] = Date.now() + Math.max(1000, seconds * 1000)
+    console.log(`⛔ Disabled endpoint ${endpoint} for ${seconds}s`)
+  } catch (e) {
+    // ignore
+  }
+}
+function isEndpointDisabled(endpoint: string) {
+  try {
+    const t = disabledEndpoints[endpoint]
+    if (!t) return false
+    if (Date.now() > t) {
+      delete disabledEndpoints[endpoint]
+      return false
+    }
+    return true
+  } catch (e) {
+    return false
+  }
+}
 
 function parseRetryAfter(headerValue: any): number {
   // Return seconds. Accept formats: "60", "60s", "1m", "120"
@@ -351,6 +398,7 @@ function setGlobalRateLimit(seconds: number) {
 function isGloballyRateLimited() {
   return Date.now() < globalRateLimitedUntil
 }
+export { setGlobalRateLimit, isGloballyRateLimited, scheduleBackgroundFetch }
 
 // Pending fetch dedupe map to avoid duplicate identical requests triggering rate limits
 const pendingFetches: Map<string, Promise<any>> = new Map()
@@ -441,8 +489,78 @@ export async function fetchPartners(params?: Record<string, any>) {
 }
 
 export async function fetchMessages() {
-  const resp = await api.get(API_ENDPOINTS.messages.list)
-  return resp.data
+  // If global rate limit is active, return cached recent activities/messages if available
+  try {
+    if (isGloballyRateLimited()) {
+      console.warn('[fetchMessages] global rate limit active — returning cached recent activities/messages if present')
+      const cached = getCachedData('recentActivities') || getCachedData('transactions') || null
+      if (cached) return cached
+      return []
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Try multiple common endpoints for messages to be tolerant to API differences
+  const candidates = [
+    API_ENDPOINTS.messages?.list,
+    '/messages',
+    '/messages/list',
+    '/admin/messages',
+    '/admin/messages/list',
+    '/notifications',
+    '/notifications/list',
+    '/admin/notifications',
+    '/admin/notifications/list'
+  ].filter(Boolean) as string[]
+
+  let lastError: any = null
+  for (const ep of candidates) {
+    try {
+      const path = String(ep).replace(/^\/api(\/v1)?/i, '')
+      if (isEndpointDisabled(path)) {
+        console.log(`[fetchMessages] skipping recently disabled endpoint ${path}`)
+        continue
+      }
+      const resp = await api.get(path)
+      if (resp.status === 200 && resp.data !== undefined) {
+        // normalize to array when possible
+        const d = resp.data
+        if (Array.isArray(d)) return d
+        if (d.items && Array.isArray(d.items)) return d.items
+        if (d.data && Array.isArray(d.data)) return d.data
+        if (d.notifications && Array.isArray(d.notifications)) return d.notifications
+        return d
+      }
+    } catch (err: any) {
+      lastError = err
+      const status = err?.response?.status
+      // If global rate limit activated by server response, schedule background refresh and return cached
+      if (status === 429) {
+        const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+        const retrySeconds = parseRetryAfter(retryAfterHeader)
+        setGlobalRateLimit(retrySeconds)
+        scheduleBackgroundFetch('recentActivities', () => fetchRecentActivities(10), retrySeconds)
+        console.warn('[fetchMessages] received 429, scheduled background refresh for recent activities')
+        const cached = getCachedData('recentActivities') || getCachedData('transactions') || null
+        if (cached) return cached
+        return []
+      }
+      // If not found, try next candidate
+      if (status === 404) {
+        try { disableEndpoint(String(ep).replace(/^\/api(\/v1)?/i, ''), 60 * 5) } catch (e) {}
+        continue
+      }
+      // For rate limiting, bubble up handling to global helpers
+      // For other errors, try next candidate
+      // For other errors, try next candidate
+      continue
+    }
+  }
+
+  // If nothing worked, return empty array and log the last error
+  if (lastError) console.warn('[fetchMessages] all candidates failed, returning empty array', lastError)
+  return []
 }
 
 export async function fetchUsers(params?: Record<string, any>) {
@@ -768,75 +886,111 @@ export async function fetchRecentActivities(limit: number = 10, params?: Record<
 }
 
 export async function fetchTransactions(params?: Record<string, any>) {
-  // Add parameters to include user data in transactions
-  const enhancedParams: Record<string, any> = {
-    ...params,
-    // Try different parameter names for including related data
-    include: 'user', // Laravel-style
-    with: 'user', // Some APIs
-    expand: 'user', // OData-style
-    populate: 'user', // Strapi-style
-    relations: 'user', // Generic
+  const key = pendingKey('transactions.list', params)
+  if (pendingFetches.has(key)) {
+    return await pendingFetches.get(key)
   }
 
-  // Add multiple date parameter variations to improve compatibility
-  if (params?.from || params?.date_from || params?.start_date || params?.created_at_from || params?.created_from) {
-    const fromDate = params.from || params.date_from || params.start_date || params.created_at_from || params.created_from
-    enhancedParams.from = fromDate
-    enhancedParams.date_from = fromDate
-    enhancedParams.start_date = fromDate
-    enhancedParams.created_at_from = fromDate
-    enhancedParams.created_from = fromDate
-    enhancedParams.date_start = fromDate
-    enhancedParams.startDate = fromDate
+  const promise = (async () => {
+    // Try in-memory/local cache first
+    const cached = getCachedData('transactions')
+    if (cached) return cached
 
-    // Add timestamp versions if the date looks like a date string
-    if (typeof fromDate === 'string' && fromDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const fromDateTime = new Date(fromDate + 'T00:00:00.000Z')
-      const fromISOString = fromDateTime.toISOString()
-      enhancedParams.from_timestamp = fromISOString
-      enhancedParams.start_timestamp = fromISOString
-      enhancedParams.created_at_gte = fromISOString
-      enhancedParams.date_gte = fromDate
+    // Build enhanced params with multiple compatibility keys
+    const enhancedParams: Record<string, any> = {
+      ...params,
+      include: 'user',
+      with: 'user',
+      expand: 'user',
+      populate: 'user',
+      relations: 'user',
     }
-  }
 
-  if (params?.to || params?.date_to || params?.end_date || params?.created_at_to || params?.created_to) {
-    const toDate = params.to || params.date_to || params.end_date || params.created_at_to || params.created_to
-    enhancedParams.to = toDate
-    enhancedParams.date_to = toDate
-    enhancedParams.end_date = toDate
-    enhancedParams.created_at_to = toDate
-    enhancedParams.created_to = toDate
-    enhancedParams.date_end = toDate
-    enhancedParams.endDate = toDate
-
-    // Add timestamp versions if the date looks like a date string
-    if (typeof toDate === 'string' && toDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const toDateTime = new Date(toDate + 'T23:59:59.999Z')
-      const toISOString = toDateTime.toISOString()
-      enhancedParams.to_timestamp = toISOString
-      enhancedParams.end_timestamp = toISOString
-      enhancedParams.created_at_lte = toISOString
-      enhancedParams.date_lte = toDate
-    }
-  }
-
-  const endpoints = ['/transactions', '/admin/transactions', '/payments', '/admin/payments']
-  for (const ep of endpoints) {
-    try {
-      const resp = await api.get(ep, { params: enhancedParams })
-      if (resp.status === 200 && resp.data) {
-        return resp.data
+    // Add date variations (same logic as before)
+    if (params?.from || params?.date_from || params?.start_date || params?.created_at_from || params?.created_from) {
+      const fromDate = params.from || params.date_from || params.start_date || params.created_at_from || params.created_from
+      enhancedParams.from = fromDate
+      enhancedParams.date_from = fromDate
+      enhancedParams.start_date = fromDate
+      enhancedParams.created_at_from = fromDate
+      enhancedParams.created_from = fromDate
+      enhancedParams.date_start = fromDate
+      enhancedParams.startDate = fromDate
+      if (typeof fromDate === 'string' && fromDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const fromDateTime = new Date(fromDate + 'T00:00:00.000Z')
+        const fromISOString = fromDateTime.toISOString()
+        enhancedParams.from_timestamp = fromISOString
+        enhancedParams.start_timestamp = fromISOString
+        enhancedParams.created_at_gte = fromISOString
+        enhancedParams.date_gte = fromDate
       }
-    } catch (err: any) {
-      if (err?.response?.status === 404) continue
-      throw err
     }
-  }
-  return { items: [], total: 0 }
-}
+    if (params?.to || params?.date_to || params?.end_date || params?.created_at_to || params?.created_to) {
+      const toDate = params.to || params.date_to || params.end_date || params.created_at_to || params.created_to
+      enhancedParams.to = toDate
+      enhancedParams.date_to = toDate
+      enhancedParams.end_date = toDate
+      enhancedParams.created_at_to = toDate
+      enhancedParams.created_to = toDate
+      enhancedParams.date_end = toDate
+      enhancedParams.endDate = toDate
+      if (typeof toDate === 'string' && toDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const toDateTime = new Date(toDate + 'T23:59:59.999Z')
+        const toISOString = toDateTime.toISOString()
+        enhancedParams.to_timestamp = toISOString
+        enhancedParams.end_timestamp = toISOString
+        enhancedParams.created_at_lte = toISOString
+        enhancedParams.date_lte = toDate
+      }
+    }
 
+    // If globally rate-limited, schedule background refresh and return cached/empty result
+    if (isGloballyRateLimited()) {
+      console.warn('[fetchTransactions] global rate limit active - returning cached or empty result')
+      const remaining = Math.max(1, Math.ceil((globalRateLimitedUntil - Date.now()) / 1000))
+      scheduleBackgroundFetch('transactions', () => fetchTransactions(params), remaining)
+      return cached || { items: [], total: 0 }
+    }
+
+    const endpoints = ['/admin/transactions', '/transactions', '/admin/payments', '/payments']
+    for (const ep of endpoints) {
+      try {
+        const candidatePath = String(ep).replace(/^\/api(\/v1)?/i, '')
+        console.log('[fetchTransactions] trying', candidatePath, 'with params', enhancedParams)
+        const resp = await api.get(candidatePath, { params: enhancedParams })
+        if (resp.status === 200 && resp.data) {
+          // cache successful response
+          setCachedData('transactions', resp.data)
+          return resp.data
+        }
+      } catch (err: any) {
+        const status = err?.response?.status
+        // If 429, set global rate limit and schedule background refresh
+        if (status === 429) {
+          const retryAfterHeader = err?.response?.data?.retry_after || err?.response?.headers?.['retry-after']
+          const retrySeconds = parseRetryAfter(retryAfterHeader)
+          setGlobalRateLimit(retrySeconds)
+          console.error('[fetchTransactions] received 429, retryAfter:', retrySeconds)
+          // schedule background refresh
+          scheduleBackgroundFetch('transactions', () => fetchTransactions(params), retrySeconds)
+          return cached || { items: [], total: 0 }
+        }
+        console.warn('[fetchTransactions] endpoint failed', ep, { status, message: err?.message })
+        if (status === 404) continue
+        throw err
+      }
+    }
+    return { items: [], total: 0 }
+  })()
+
+  pendingFetches.set(key, promise)
+  try {
+    const res = await promise
+    return res
+  } finally {
+    pendingFetches.delete(key)
+  }
+}
 export async function getTransaction(id: string | number) {
   const endpoints = [`/transactions/${id}`, `/admin/transactions/${id}`, `/payments/${id}`, `/admin/payments/${id}`]
   for (const ep of endpoints) {

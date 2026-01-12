@@ -289,55 +289,47 @@ export default function Products({ onError }: { onError?: (msg: string) => void 
                 {({ index, style }) => {
                   const p = filteredProducts[index]
                   return (
-                    <div key={String(p.id)} style={{ ...style, padding: 12, borderBottom: '1px solid rgba(0,0,0,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', boxSizing: 'border-box' }}>
-                      <div style={{ flex: 1, paddingRight: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-                          <div style={{ width: 56, height: 56, borderRadius: 8, overflow: 'hidden', background: 'var(--gray-50)', flexShrink: 0 }}>
-                            {(() => {
-                              const src = getProductImageSrc(p)
-                              if (src) return <img src={src} alt={String(p.name)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' }}>📦</div>
-                            })()}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <strong style={{ fontSize: 16, color: 'var(--gray-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</strong>
-                              {p.category && (
-                                <span style={{
-                                  background: 'var(--primary)',
-                                  color: 'white',
-                                  padding: '4px 8px',
-                                  borderRadius: '12px',
-                                  fontSize: '11px',
-                                  fontWeight: 700
-                                }}>
-                                  {p.category}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 13, color: 'var(--gray-600)', marginTop: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {p.description}
-                            </div>
-                          </div>
+                    <div key={String(p.id)} style={{ ...style, padding: 12, borderBottom: '1px solid rgba(0,0,0,0.04)', display: 'flex', gap: 12, alignItems: 'flex-start', boxSizing: 'border-box' }}>
+                      <div style={{ width: 72, flexShrink: 0 }}>
+                        <div style={{ width: 72, height: 72, borderRadius: 8, overflow: 'hidden', background: 'var(--gray-50)' }}>
+                          {(() => {
+                            const src = getProductImageSrc(p)
+                            if (src) return <img src={src} alt={String(p.name)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-400)' }}>📦</div>
+                          })()}
                         </div>
-                        <div style={{ display: 'flex', gap: 12, fontSize: 13, marginTop: 8 }}>
-                          {p.price !== undefined && p.price !== null && (
-                            <span className="muted" style={{ color: 'var(--gray-700)', fontWeight: 700 }}>{Number(p.price).toLocaleString()} сом</span>
-                          )}
-                          {p.stock !== undefined && <span className="muted">Запас: {p.stock}</span>}
-                          {p.isAvailable !== undefined && (
-                            <span style={{
-                              color: p.isAvailable ? '#10b981' : '#ef4444',
-                              fontWeight: 700
-                            }}>
-                              {p.isAvailable ? 'Доступен' : 'Недоступен'}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <strong style={{ fontSize: 16, color: 'var(--gray-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</strong>
+                          {p.category && (
+                            <span style={{ background: 'var(--primary)', color: 'white', padding: '4px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700 }}>
+                              {p.category}
                             </span>
                           )}
                         </div>
+                        <div style={{ fontSize: 13, color: 'var(--gray-600)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {p.description}
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                        <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
-                        <button className="button" onClick={() => handleDelete(p)} style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
+
+                      <div style={{ width: 220, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          {p.price !== undefined && p.price !== null && <div style={{ fontWeight: 800, color: 'var(--gray-900)', fontSize: 15 }}>{Number(p.price).toLocaleString()} сом</div>}
+                          <div style={{ fontSize: 12, color: 'var(--gray-600)' }}>
+                            {p.stock !== undefined ? `Запас: ${p.stock}` : ''}
+                          </div>
+                          {p.isAvailable !== undefined && (
+                            <div style={{ marginTop: 6, fontWeight: 700, color: p.isAvailable ? '#10b981' : '#ef4444' }}>
+                              {p.isAvailable ? 'Доступен' : 'Недоступен'}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="button" onClick={() => handleEdit(p)}>Изменить</button>
+                          <button className="button" onClick={() => handleDelete(p)} style={{ background: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' }}>Удалить</button>
+                        </div>
                       </div>
                     </div>
                   )
