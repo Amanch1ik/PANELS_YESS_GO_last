@@ -82,6 +82,13 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/api/, '/api/v1')
       },
+      // Local proxy to forward /local-api calls to the backend proxy server (server/proxy.js)
+      '/local-api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/local-api/, '/local-api')
+      },
       '/partner': {
         target: 'https://api.yessgo.org',
         changeOrigin: true,

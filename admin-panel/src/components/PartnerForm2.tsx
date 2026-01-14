@@ -1,4 +1,27 @@
 import React, { useState } from 'react'
+// Inject small component-scoped styles to ensure inputs do not overflow
+const _injectPartnerFormStyles = (() => {
+  if (typeof document === 'undefined') return
+  const id = 'partner-form2-styles'
+  if (document.getElementById(id)) return
+  const s = document.createElement('style')
+  s.id = id
+  s.textContent = `
+    .partner-form-modal input,
+    .partner-form-modal textarea,
+    .partner-form-modal select,
+    .partner-form-modal datalist {
+      box-sizing: border-box;
+      max-width: 100%;
+    }
+    .partner-form-card {
+      width: 100%;
+      max-width: 760px;
+      box-sizing: border-box;
+    }
+  `
+  document.head.appendChild(s)
+})()
 
 type PartnerInput = {
   id?: number | string
@@ -30,6 +53,7 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
   const [password, setPassword] = useState(initial?.password || '')
   const [address, setAddress] = useState(initial?.address || '')
   const [email, setEmail] = useState(initial?.email || '')
+  const [description, setDescription] = useState(initial?.description || '')
 
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [logoUrl, setLogoUrl] = useState('')
@@ -71,7 +95,7 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
         category: category.trim(),
         phone: phone.trim(),
         password: password.trim(),
-        description: `${name.trim()} - партнер YESS!GO`,
+        description: description.trim() || `${name.trim()} - партнер YESS!GO`,
         // Добавляем базовые значения для обязательных полей
         city_id: 1,
         max_discount_percent: 20,
@@ -95,7 +119,7 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
   }
 
   return (
-    <div style={{
+    <div className="partner-form-modal" style={{
       position: 'fixed',
       inset: 0,
       background: 'rgba(2,6,23,0.6)',
@@ -105,7 +129,7 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
       padding: 20,
       zIndex: 80
     }}>
-      <div className="card" style={{ width: 'min(760px,100%)', maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
+      <div className="card partner-form-card" style={{ width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <h3 style={{ margin: 0 }}>{initial ? '✏️ Редактировать партнера' : '➕ Новый партнер'}</h3>
         </div>
@@ -156,7 +180,7 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
               📋 Основная информация
             </h4>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 16 }}>
               <div>
                 <label style={{ display: 'block', marginBottom: 6, color: 'var(--gray-700)', fontWeight: 600 }}>Название партнера *</label>
                 <input
@@ -171,11 +195,15 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
 
               <div>
                 <label style={{ display: 'block', marginBottom: 6, color: 'var(--gray-700)', fontWeight: 600 }}>Категория</label>
-                <select
+                {/* allow free text input while offering common categories as suggestions */}
+                <input
+                  list="partner-categories"
                   value={category}
                   onChange={e => setCategory(e.target.value)}
+                  placeholder="Выберите или введите категорию"
                   style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid var(--gray-300)', background: 'var(--white)', color: 'var(--gray-900)' }}
-                >
+                />
+                <datalist id="partner-categories">
                   <option value="Рестораны">🍽️ Рестораны</option>
                   <option value="Кафе">☕ Кафе</option>
                   <option value="Магазины">🛍️ Магазины</option>
@@ -184,7 +212,7 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
                   <option value="Развлечения">🎭 Развлечения</option>
                   <option value="Здоровье">🏥 Здоровье</option>
                   <option value="Образование">📚 Образование</option>
-                </select>
+                </datalist>
               </div>
 
               <div>
@@ -229,6 +257,17 @@ export default function PartnerForm2({ initial, onCancel, onSave }: {
                 onChange={e => setAddress(e.target.value)}
                 placeholder="г. Бишкек, ул. Ленина, 123"
                 style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid var(--gray-300)', background: 'var(--white)', color: 'var(--gray-900)' }}
+              />
+            </div>
+            {/* Description */}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'block', marginBottom: 6, color: 'var(--gray-700)', fontWeight: 600 }}>Описание</label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Краткое описание партнёра для отображения в админке"
+                rows={3}
+                style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid var(--gray-300)', background: 'var(--white)', color: 'var(--gray-900)', resize: 'vertical' }}
               />
             </div>
           </div>

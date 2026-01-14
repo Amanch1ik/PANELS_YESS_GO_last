@@ -183,6 +183,23 @@ export default function Partners() {
 
   useEffect(() => {
     load()
+
+    // Reload partners list when other parts of the app signal changes (create/update/delete)
+    const onPartnersChanged = () => {
+      try {
+        // Force refetch from server
+        load()
+      } catch (e) {
+        console.error('Error reloading partners after partners-changed event', e)
+      }
+    }
+    try {
+      window.addEventListener('partners-changed', onPartnersChanged)
+    } catch (e) {}
+
+    return () => {
+      try { window.removeEventListener('partners-changed', onPartnersChanged) } catch (e) {}
+    }
   }, [])
 
   const categories = React.useMemo(() => {
