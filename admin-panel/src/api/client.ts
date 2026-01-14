@@ -1265,6 +1265,15 @@ export async function createPartner(payload: Record<string, any>) {
     if (localResp.ok) {
       const data = await localResp.json()
       console.log('✅ Partner created via local proxy', data)
+      // Clear partners cache so UI reloads authoritative list from API
+      try {
+        cache.partners = { data: null, timestamp: 0 }
+        try { localStorage.removeItem(`${STORAGE_PREFIX}partners`) } catch (e) {}
+        try { window.dispatchEvent(new Event('partners-changed')) } catch (e) {}
+        console.log('🗑️ Cleared partners cache after create (local proxy); UI will refetch from API')
+      } catch (e) {
+        console.warn('⚠️ Failed to clear partners cache after local proxy create', e)
+      }
       return data
     } else {
       console.warn('Local proxy returned non-OK status', localResp.status)
@@ -1341,7 +1350,17 @@ export async function createPartner(payload: Record<string, any>) {
 
         if (resp.status >= 200 && resp.status < 300) {
           console.log(`✅ Партнер успешно создан на ${endpoint} методом ${method.toUpperCase()}!`)
-          return resp.data
+          const created = resp.data
+          // Clear partners cache so UI reloads authoritative list from API
+          try {
+            cache.partners = { data: null, timestamp: 0 }
+            try { localStorage.removeItem(`${STORAGE_PREFIX}partners`) } catch (e) {}
+            try { window.dispatchEvent(new Event('partners-changed')) } catch (e) {}
+            console.log('🗑️ Cleared partners cache after create; UI will refetch from API')
+          } catch (e) {
+            console.warn('⚠️ Failed to clear partners cache after create', e)
+          }
+          return created
         }
       } catch (err: any) {
         const status = err?.response?.status
@@ -1413,6 +1432,15 @@ export async function createPartner(payload: Record<string, any>) {
     if (directResponse.ok) {
       const data = await directResponse.json()
       console.log('✅ Прямой запрос к API удался!')
+      // Clear partners cache so UI reloads authoritative list from API
+      try {
+        cache.partners = { data: null, timestamp: 0 }
+        try { localStorage.removeItem(`${STORAGE_PREFIX}partners`) } catch (e) {}
+        try { window.dispatchEvent(new Event('partners-changed')) } catch (e) {}
+        console.log('🗑️ Cleared partners cache after direct create; UI will refetch from API')
+      } catch (e) {
+        console.warn('⚠️ Failed to clear partners cache after direct create', e)
+      }
       return data
     } else {
       const errorText = await directResponse.text()

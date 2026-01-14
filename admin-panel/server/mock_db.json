@@ -1,0 +1,82 @@
+{
+  "partners": [
+    {
+      "id": 1768385382287,
+      "name": "qwqwqw",
+      "description": "qwqwqw - партнер YESS!GO",
+      "category": "Кафе",
+      "phone": "+996551697296",
+      "email": "aa@gmail.com",
+      "password": "Chillgu1",
+      "address": "Timiriazeva 11",
+      "two_gis_url": "https://2gis.kg/bishkek",
+      "max_discount_percent": 20,
+      "created_at": "2026-01-14T10:09:42.287Z"
+    },
+    {
+      "id": 1768385860838,
+      "name": "capito",
+      "description": "capito - партнер YESS!GO",
+      "category": "Рестораны",
+      "phone": "+996551697296",
+      "email": "a@gmail.com",
+      "password": "123123123",
+      "address": "Timiriazeva 11",
+      "two_gis_url": "https://2gis.kg/bishkek",
+      "max_discount_percent": 20,
+      "created_at": "2026-01-14T10:17:40.839Z"
+    },
+    {
+      "id": 1768386063476,
+      "name": "capitoooo",
+      "description": "capitoooo - партнер YESS!GO",
+      "category": "Кафе",
+      "phone": "+996551697296",
+      "email": "aman@gmail.com",
+      "password": "123123123",
+      "address": "Timiriazeva 11",
+      "two_gis_url": "https://2gis.kg/bishkek",
+      "max_discount_percent": 20,
+      "created_at": "2026-01-14T10:21:03.476Z"
+    },
+    {
+      "id": 1768387154358,
+      "name": "navat",
+      "description": "navat - партнер YESS!GO",
+      "category": "Кафе",
+      "phone": "+996551697296",
+      "email": "a@gmail.com",
+      "password": "Chillgu1",
+      "address": "Timiriazeva 11",
+      "two_gis_url": "https://2gis.kg/bishkek",
+      "max_discount_percent": 20,
+      "created_at": "2026-01-14T10:39:14.358Z"
+    },
+    {
+      "id": 1768387573440,
+      "name": "nabat",
+      "description": "nabat - партнер YESS!GO",
+      "category": "Кафе",
+      "phone": "+996551697296",
+      "email": "a@gmail.com",
+      "password": "Chillgu1",
+      "address": "Timiriazeva 11",
+      "two_gis_url": "https://2gis.kg/bishkek",
+      "max_discount_percent": 20,
+      "created_at": "2026-01-14T10:46:13.440Z"
+    },
+    {
+      "id": 1768387704561,
+      "name": "cavvvv",
+      "description": "cavvvv - партнер YESS!GO",
+      "category": "Кафе",
+      "phone": "+996551697296",
+      "email": "a@gmail.com",
+      "password": "123123123",
+      "address": "Timiriazeva 1",
+      "two_gis_url": "https://2gis.kg/bishkek",
+      "max_discount_percent": 20,
+      "created_at": "2026-01-14T10:48:24.561Z"
+    }
+  ]
+}

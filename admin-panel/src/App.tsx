@@ -13,7 +13,6 @@ const Messages = lazy(() => import('./pages/Messages'))
 const Users = lazy(() => import('./pages/Users'))
 const Products = lazy(() => import('./pages/Products'))
 const Transactions = lazy(() => import('./pages/Transactions'))
-// RBAC and Audit pages temporarily hidden
 const MapPage = lazy(() => import('./pages/Map'))
 
 // Компонент загрузки
@@ -148,10 +147,7 @@ function Navigation() {
             border: isActive('/users') ? 'none' : '1px solid var(--gray-300)'
           }}>Пользователи</button>
         </Link>
-        {/*
-          RBAC and Audit links removed temporarily per request.
-          To restore, uncomment the Link blocks above and re-add routes below.
-        */}
+        {/* Navigation links */}
         <button className="button" onClick={() => { setAuthToken(null); window.location.href = '/' }} style={{
           background: '#dc2626',
           color: 'var(--white)',
@@ -213,7 +209,7 @@ function AppContent({ onLogin }: { onLogin?: () => void }) {
           <Route path="/transactions" element={<Transactions onError={onError} />} />
           <Route path="/messages" element={<Messages onError={onError} />} />
           <Route path="/users" element={<Users onError={onError} />} />
-          {/* RBAC and Audit routes removed temporarily */}
+          {/* Non-essential routes removed */}
         </Routes>
       </Suspense>
     </>
