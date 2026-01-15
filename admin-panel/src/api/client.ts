@@ -437,11 +437,26 @@ export async function fetchPartners(params?: Record<string, any>) {
       console.log('📥 Загружаем список партнеров...')
       const resp = await api.get(API_ENDPOINTS.partners.list, { params })
 
-      // Проверяем, что ответ содержит данные
+      // Проверяем, что ответ содержит данные — нормализуем разные формы ответа
       if (resp.data && typeof resp.data === 'object') {
-        console.log(`✅ Загружено партнеров:`, Array.isArray(resp.data) ? resp.data.length : 'не массив')
-        setCachedData('partners', resp.data)
-        return resp.data
+        let list: any[] | null = null
+        const d = resp.data
+        if (Array.isArray(d)) list = d
+        else if (Array.isArray(d.items)) list = d.items
+        else if (Array.isArray(d.data)) list = d.data
+        else if (Array.isArray(d.partners)) list = d.partners
+        else if (Array.isArray(d.results)) list = d.results
+        else if (Array.isArray(d.rows)) list = d.rows
+
+        if (list) {
+          console.log(`✅ Загружено партнеров:`, list.length)
+          setCachedData('partners', list)
+          return list
+        }
+
+        console.log('✅ Загружено партнеров (объект, не массив) — возвращаем объект для downstream нормализации')
+        setCachedData('partners', d)
+        return d
       } else {
         console.warn('⚠️ API вернул неожиданный формат данных:', resp.data)
         return []
@@ -1256,10 +1271,15 @@ export async function createPartner(payload: Record<string, any>) {
 
   // Try local proxy first to avoid CORS and to ensure server-side token usage in development
   try {
-    // Use relative fetch to call local proxy (same-origin)
+    // Use relative fetch to call local proxy (same-origin) and include Authorization if present
     const localResp = await fetch('/local-api/admin/partners', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: (() => {
+        const h: Record<string,string> = { 'Content-Type': 'application/json' }
+        const t = getStoredAccessToken()
+        if (t) h.Authorization = `Bearer ${t}`
+        return h
+      })(),
       body: JSON.stringify(payload)
     })
     if (localResp.ok) {
@@ -1280,6 +1300,8 @@ export async function createPartner(payload: Record<string, any>) {
     }
   } catch (e) {
     console.warn('Local proxy create failed, falling back to direct endpoints:', e)
+    // Stop client-side fallback to direct browser->API requests to avoid CORS and unexpected endpoints.
+    throw new Error('Local proxy create failed. Ensure local proxy is running and ADMIN_API_TOKEN is set on the proxy.')
   }
 
   // Пробуем разные эндпоинты для создания партнеров
