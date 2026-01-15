@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { login, setAuthToken } from '../api/client'
 import { useNotification } from '../contexts/NotificationContext'
 
@@ -166,6 +166,8 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const usernameRef = useRef<HTMLInputElement | null>(null)
+  const passwordRef = useRef<HTMLInputElement | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -221,6 +223,17 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
       setLoading(false)
     }
   }
+
+  // Focus username input when an error appears to help the user retry quickly
+  useEffect(() => {
+    if (error) {
+      try {
+        usernameRef.current?.focus()
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [error])
 
   return (
     <div style={{
@@ -287,7 +300,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
         </div>
 
         {/* Форма */}
-        <form onSubmit={handleSubmit} style={{ position: 'relative', zIndex: 1 }}>
+        <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); handleSubmit(e); }} style={{ position: 'relative', zIndex: 1 }}>
           <div className="login-form-group" style={{ marginBottom: '20px' }}>
             <label style={{
               display: 'block',
@@ -304,6 +317,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               <input
                 className="login-input"
                 type="text"
+                ref={usernameRef}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="admin"
@@ -313,8 +327,8 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                   boxSizing: 'border-box',
                 padding: '16px 20px 16px 56px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(7, 185, 129, 0.3)',
-                  background: 'rgba(7, 185, 129, 0.05)',
+                  border: `1px solid ${error ? 'rgba(239,68,68,0.6)' : 'rgba(7, 185, 129, 0.3)'}`,
+                  background: error ? 'rgba(255,235,238,0.6)' : 'rgba(7, 185, 129, 0.05)',
                   color: 'var(--gray-800)',
                   fontSize: '16px',
                   transition: 'all 0.3s ease',
@@ -354,6 +368,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               <input
                 className="login-input"
                 type={showPassword ? 'text' : 'password'}
+                ref={passwordRef}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Введите ваш пароль"
@@ -363,19 +378,24 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                   boxSizing: 'border-box',
                   padding: '16px 20px 16px 56px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(7, 185, 129, 0.3)',
-                  background: 'rgba(7, 185, 129, 0.05)',
+                  border: `1px solid ${error ? 'rgba(239,68,68,0.6)' : 'rgba(7, 185, 129, 0.3)'}`,
+                  background: error ? 'rgba(255,235,238,0.6)' : 'rgba(7, 185, 129, 0.05)',
                   color: 'var(--gray-800)',
                   fontSize: '16px',
                   transition: 'all 0.3s ease',
                   outline: 'none'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = 'var(--accent)';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(7, 185, 129, 0.2)';
+                  if (!error) {
+                    e.target.style.borderColor = 'var(--accent)';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(7, 185, 129, 0.2)';
+                  } else {
+                    e.target.style.borderColor = 'rgba(239,68,68,0.8)';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.08)';
+                  }
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = 'rgba(7, 185, 129, 0.3)';
+                  e.target.style.borderColor = error ? 'rgba(239,68,68,0.6)' : 'rgba(7, 185, 129, 0.3)';
                   e.target.style.boxShadow = 'none';
                 }}
               />
@@ -418,26 +438,36 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
           </div>
 
           {error && (
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+            <div role="alert" aria-live="assertive" style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(220, 38, 38, 0.06) 100%)',
+              border: '1px solid rgba(239, 68, 68, 0.28)',
               borderRadius: '8px',
               padding: '12px 16px',
               marginBottom: '20px',
-              color: '#ef4444',
+              color: '#b91c1c',
               fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
               gap: '8px'
             }}>
-              ⚠️ {error}
+              <div style={{ fontSize: '18px' }}>⚠️</div>
+              <div style={{ flex: 1 }}>{error}</div>
+              <button type="button" onClick={() => setError(null)} style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--gray-600)',
+                cursor: 'pointer',
+                fontSize: '14px',
+                padding: '4px 8px'
+              }}>Закрыть</button>
             </div>
           )}
 
           <button
             className="login-button"
-            type="submit"
+            type="button"
             disabled={loading}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSubmit(e as any); }}
             style={{
               width: '100%',
               padding: '16px',
