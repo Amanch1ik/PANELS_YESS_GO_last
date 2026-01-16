@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { login, setAuthToken } from '../api/client'
 import { useNotification } from '../contexts/NotificationContext'
 
@@ -178,6 +178,8 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const usernameRef = useRef<HTMLInputElement | null>(null)
+  const passwordRef = useRef<HTMLInputElement | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -233,6 +235,17 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
       setLoading(false)
     }
   }
+
+  // Focus username input when an error appears to help the user retry quickly
+  useEffect(() => {
+    if (error) {
+      try {
+        usernameRef.current?.focus()
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [error])
 
   return (
     <div style={{
@@ -350,6 +363,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               <input
                 className="login-input"
                 type="text"
+                ref={usernameRef}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="Введите имя пользователя"
@@ -415,6 +429,7 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
               <input
                 className="login-input"
                 type={showPassword ? 'text' : 'password'}
+                ref={passwordRef}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Введите ваш пароль"
@@ -522,8 +537,9 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
 
           <button
             className="login-button"
-            type="submit"
+            type="button"
             disabled={loading}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSubmit(e as any); }}
             style={{
               width: '100%',
               padding: '18px',
