@@ -85,6 +85,18 @@ const styles = `
     }
   }
 
+  @keyframes loginShake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+      transform: translateX(-5px);
+    }
+    20%, 40%, 60%, 80% {
+      transform: translateX(5px);
+    }
+  }
+
   .login-card {
     animation: loginFadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
@@ -241,75 +253,109 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--gradient-bg)',
-      padding: '20px'
+      background: 'linear-gradient(135deg, #07B981 0%, #34d399 25%, #10b981 50%, #059669 75%, #047857 100%)',
+      backgroundSize: '400% 400%',
+      animation: 'gradientShift 15s ease infinite',
+      padding: '20px',
+      position: 'relative',
+      overflow: 'hidden'
     }}>
+      {/* Анимированный фон с частицами */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0.1,
+        backgroundImage: 'radial-gradient(circle at 20% 50%, white 2px, transparent 2px), radial-gradient(circle at 80% 80%, white 1px, transparent 1px), radial-gradient(circle at 40% 20%, white 1.5px, transparent 1.5px)',
+        backgroundSize: '200px 200px, 300px 300px, 250px 250px',
+        animation: 'particlesFloat 20s linear infinite'
+      }}></div>
+
+      <style>{`
+        @keyframes gradientShift {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes particlesFloat {
+          0% { transform: translate(0, 0); }
+          100% { transform: translate(-50px, -50px); }
+        }
+      `}</style>
+
       <div className="login-card" style={{
-        background: 'var(--white)',
-        borderRadius: '20px',
-        padding: '40px',
-        boxShadow: 'var(--shadow-lg)',
-        border: '1px solid var(--gray-200)',
-        maxWidth: '450px',
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(20px)',
+        borderRadius: '24px',
+        padding: '48px',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.5) inset',
+        border: '1px solid rgba(255, 255, 255, 0.3)',
+        maxWidth: '480px',
         width: '100%',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        zIndex: 1
       }}>
-        {/* Декоративный элемент */}
+        {/* Декоративные элементы */}
         <div className="login-decorative-1" style={{
           position: 'absolute',
-          top: '-50px',
-          right: '-50px',
-          width: '100px',
-          height: '100px',
-          background: 'var(--accent)',
+          top: '-80px',
+          right: '-80px',
+          width: '200px',
+          height: '200px',
+          background: 'linear-gradient(135deg, rgba(7, 185, 129, 0.2) 0%, rgba(52, 211, 153, 0.1) 100%)',
           borderRadius: '50%',
-          opacity: 0.1
+          filter: 'blur(40px)'
         }}></div>
 
         <div className="login-decorative-2" style={{
           position: 'absolute',
-          bottom: '-30px',
-          left: '-30px',
-          width: '60px',
-          height: '60px',
-          background: 'var(--accent-light)',
+          bottom: '-60px',
+          left: '-60px',
+          width: '150px',
+          height: '150px',
+          background: 'linear-gradient(135deg, rgba(7, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%)',
           borderRadius: '50%',
-          opacity: 0.1
+          filter: 'blur(40px)'
         }}></div>
 
         {/* Заголовок */}
-        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px', position: 'relative', zIndex: 2 }}>
           <div className="login-title" style={{
-            fontSize: '32px',
-            fontWeight: '700',
-            color: 'var(--accent)',
-            textShadow: 'none',
-            marginBottom: '8px'
+            fontSize: '42px',
+            fontWeight: '800',
+            background: 'linear-gradient(135deg, #07B981 0%, #34d399 50%, #667eea 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            marginBottom: '12px',
+            letterSpacing: '-0.5px'
           }}>
             YESS!GO
           </div>
           <div className="login-subtitle" style={{
-            fontSize: '18px',
+            fontSize: '16px',
             color: 'var(--gray-600)',
             fontWeight: '500',
-            textShadow: 'none'
+            letterSpacing: '0.3px'
           }}>
             Панель Администратора
           </div>
         </div>
 
         {/* Форма */}
-        <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); handleSubmit(e); }} style={{ position: 'relative', zIndex: 1 }}>
-          <div className="login-form-group" style={{ marginBottom: '20px' }}>
+        <form onSubmit={handleSubmit} style={{ position: 'relative', zIndex: 1 }}>
+          <div className="login-form-group" style={{ marginBottom: '24px' }}>
             <label style={{
               display: 'block',
               color: 'var(--gray-700)',
               fontSize: '14px',
               fontWeight: '600',
-              marginBottom: '6px',
+              marginBottom: '10px',
               textTransform: 'none',
-              letterSpacing: '0'
+              letterSpacing: '0.2px'
             }}>
               Имя пользователя
             </label>
@@ -320,47 +366,62 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                 ref={usernameRef}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="admin"
+                placeholder="Введите имя пользователя"
                 required
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                padding: '16px 20px 16px 56px',
-                  borderRadius: '12px',
-                  border: `1px solid ${error ? 'rgba(239,68,68,0.6)' : 'rgba(7, 185, 129, 0.3)'}`,
-                  background: error ? 'rgba(255,235,238,0.6)' : 'rgba(7, 185, 129, 0.05)',
+                  padding: '18px 20px 18px 56px',
+                  borderRadius: '14px',
+                  border: '2px solid rgba(7, 185, 129, 0.2)',
+                  background: 'rgba(255, 255, 255, 0.8)',
+                  backdropFilter: 'blur(10px)',
                   color: 'var(--gray-800)',
-                  fontSize: '16px',
-                  transition: 'all 0.3s ease',
-                  outline: 'none'
+                  fontSize: '15px',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#07B981';
+                  e.target.style.background = 'rgba(255, 255, 255, 1)';
+                  e.target.style.boxShadow = '0 0 0 4px rgba(7, 185, 129, 0.15)';
+                  e.target.style.transform = 'translateY(-1px)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'rgba(7, 185, 129, 0.2)';
+                  e.target.style.background = 'rgba(255, 255, 255, 0.8)';
+                  e.target.style.boxShadow = 'none';
+                  e.target.style.transform = 'translateY(0)';
                 }}
               />
               <div className="login-icon-user" style={{
                 position: 'absolute',
-                left: '12px',
+                left: '18px',
                 top: '0',
                 bottom: '0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '100%',
-                color: 'var(--accent)',
-                fontSize: '18px'
+                fontSize: '20px',
+                lineHeight: '1',
+                pointerEvents: 'none',
+                margin: 'auto 0'
               }}>
                 👤
               </div>
             </div>
           </div>
 
-          <div className="login-password-group" style={{ marginBottom: '24px' }}>
+          <div className="login-password-group" style={{ marginBottom: '28px' }}>
             <label style={{
               display: 'block',
               color: 'var(--gray-700)',
               fontSize: '14px',
               fontWeight: '600',
-              marginBottom: '6px',
+              marginBottom: '10px',
               textTransform: 'none',
-              letterSpacing: '0'
+              letterSpacing: '0.2px'
             }}>
               Пароль
             </label>
@@ -376,90 +437,101 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  padding: '16px 20px 16px 56px',
-                  borderRadius: '12px',
-                  border: `1px solid ${error ? 'rgba(239,68,68,0.6)' : 'rgba(7, 185, 129, 0.3)'}`,
-                  background: error ? 'rgba(255,235,238,0.6)' : 'rgba(7, 185, 129, 0.05)',
+                  padding: '18px 56px 18px 56px',
+                  borderRadius: '14px',
+                  border: '2px solid rgba(7, 185, 129, 0.2)',
+                  background: 'rgba(255, 255, 255, 0.8)',
+                  backdropFilter: 'blur(10px)',
                   color: 'var(--gray-800)',
-                  fontSize: '16px',
-                  transition: 'all 0.3s ease',
-                  outline: 'none'
+                  fontSize: '15px',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  outline: 'none',
+                  fontFamily: 'inherit'
                 }}
                 onFocus={(e) => {
-                  if (!error) {
-                    e.target.style.borderColor = 'var(--accent)';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(7, 185, 129, 0.2)';
-                  } else {
-                    e.target.style.borderColor = 'rgba(239,68,68,0.8)';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.08)';
-                  }
+                  e.target.style.borderColor = '#07B981';
+                  e.target.style.background = 'rgba(255, 255, 255, 1)';
+                  e.target.style.boxShadow = '0 0 0 4px rgba(7, 185, 129, 0.15)';
+                  e.target.style.transform = 'translateY(-1px)';
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = error ? 'rgba(239,68,68,0.6)' : 'rgba(7, 185, 129, 0.3)';
+                  e.target.style.borderColor = 'rgba(7, 185, 129, 0.2)';
+                  e.target.style.background = 'rgba(255, 255, 255, 0.8)';
                   e.target.style.boxShadow = 'none';
+                  e.target.style.transform = 'translateY(0)';
                 }}
               />
               <div className="login-icon-lock" style={{
                 position: 'absolute',
-                left: '12px',
+                left: '18px',
                 top: '0',
                 bottom: '0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '100%',
-                color: 'var(--accent)',
-                fontSize: '18px'
+                fontSize: '20px',
+                lineHeight: '1',
+                pointerEvents: 'none',
+                margin: 'auto 0'
               }}>
                 🔒
               </div>
-              <div style={{
-                position: 'absolute',
-                right: '12px',
-                top: '50%',
-                transform: 'translateY(-50%)'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(s => !s)}
-                  aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '18px',
-                    color: 'var(--accent)'
-                  }}
-                >
-                  {showPassword ? '🙈' : '👁️'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowPassword(s => !s)}
+                aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+                style={{
+                  position: 'absolute',
+                  right: '18px',
+                  top: '0',
+                  bottom: '0',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '22px',
+                  lineHeight: '1',
+                  padding: '0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'transform 0.2s ease',
+                  borderRadius: '6px',
+                  margin: 'auto 0'
+                }}
+                onMouseEnter={(e) => {
+                  if (e.target instanceof HTMLElement) {
+                    e.target.style.transform = 'scale(1.15)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (e.target instanceof HTMLElement) {
+                    e.target.style.transform = 'scale(1)';
+                  }
+                }}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
             </div>
           </div>
 
           {error && (
-            <div role="alert" aria-live="assertive" style={{
-              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(220, 38, 38, 0.06) 100%)',
-              border: '1px solid rgba(239, 68, 68, 0.28)',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              marginBottom: '20px',
-              color: '#b91c1c',
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%)',
+              border: '2px solid rgba(239, 68, 68, 0.4)',
+              borderRadius: '12px',
+              padding: '14px 18px',
+              marginBottom: '24px',
+              color: '#dc2626',
               fontSize: '14px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '10px',
+              fontWeight: '500',
+              backdropFilter: 'blur(10px)',
+              animation: 'loginShake 0.5s ease-in-out'
             }}>
-              <div style={{ fontSize: '18px' }}>⚠️</div>
-              <div style={{ flex: 1 }}>{error}</div>
-              <button type="button" onClick={() => setError(null)} style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--gray-600)',
-                cursor: 'pointer',
-                fontSize: '14px',
-                padding: '4px 8px'
-              }}>Закрыть</button>
+              <span style={{ fontSize: '18px' }}>⚠️</span>
+              <span>{error}</span>
             </div>
           )}
 
@@ -470,44 +542,58 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSubmit(e as any); }}
             style={{
               width: '100%',
-              padding: '16px',
-              background: loading ? 'rgba(7, 185, 129, 0.6)' : 'var(--gradient-primary)',
+              padding: '18px',
+              background: loading 
+                ? 'linear-gradient(135deg, rgba(7, 185, 129, 0.6) 0%, rgba(52, 211, 153, 0.6) 100%)'
+                : 'linear-gradient(135deg, #07B981 0%, #34d399 100%)',
               color: 'var(--white)',
               border: 'none',
-              borderRadius: '12px',
+              borderRadius: '14px',
               fontSize: '16px',
-              fontWeight: '600',
+              fontWeight: '700',
               cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 8px 20px rgba(3, 83, 58, 0.4)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              boxShadow: loading
+                ? '0 4px 12px rgba(7, 185, 129, 0.3)'
+                : '0 10px 30px rgba(7, 185, 129, 0.5), 0 0 0 0 rgba(7, 185, 129, 0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '10px',
+              letterSpacing: '0.3px',
+              position: 'relative',
+              overflow: 'hidden'
             }}
             onMouseEnter={(e) => {
               if (!loading && e.target instanceof HTMLElement) {
-                e.target.style.background = 'var(--gradient-secondary)';
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 12px 30px rgba(3, 83, 58, 0.6)';
+                e.target.style.background = 'linear-gradient(135deg, #34d399 0%, #07B981 100%)';
+                e.target.style.transform = 'translateY(-3px)';
+                e.target.style.boxShadow = '0 15px 40px rgba(7, 185, 129, 0.6), 0 0 0 4px rgba(7, 185, 129, 0.2)';
               }
             }}
             onMouseLeave={(e) => {
               if (!loading && e.target instanceof HTMLElement) {
-                e.target.style.background = 'var(--gradient-primary)';
+                e.target.style.background = 'linear-gradient(135deg, #07B981 0%, #34d399 100%)';
                 e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 8px 20px rgba(3, 83, 58, 0.4)';
+                e.target.style.boxShadow = '0 10px 30px rgba(7, 185, 129, 0.5), 0 0 0 0 rgba(7, 185, 129, 0.3)';
               }
             }}
           >
             {loading ? (
               <>
-                <div className="loading" style={{ width: '18px', height: '18px', borderWidth: '2px' }}></div>
-                Вход...
+                <div className="loading" style={{ 
+                  width: '20px', 
+                  height: '20px', 
+                  borderWidth: '3px',
+                  borderColor: 'rgba(255, 255, 255, 0.3)',
+                  borderTopColor: 'white'
+                }}></div>
+                <span>Вход в систему...</span>
               </>
             ) : (
               <>
-                🚀 Войти
+                <span style={{ fontSize: '18px' }}>🚀</span>
+                <span>Войти</span>
               </>
             )}
           </button>
@@ -516,11 +602,15 @@ export default function Login({ onLogin, onError }: { onLogin: () => void, onErr
         {/* Footer */}
         <div className="login-footer" style={{
           textAlign: 'center',
-          marginTop: '24px',
-          paddingTop: '20px',
-          borderTop: '1px solid var(--gray-200)',
+          marginTop: '32px',
+          paddingTop: '24px',
+          borderTop: '1px solid rgba(7, 185, 129, 0.1)',
           color: 'var(--gray-500)',
-          fontSize: '12px'
+          fontSize: '13px',
+          fontWeight: '500',
+          letterSpacing: '0.2px',
+          position: 'relative',
+          zIndex: 2
         }}>
           YESS!GO - вход для администраторов
         </div>
