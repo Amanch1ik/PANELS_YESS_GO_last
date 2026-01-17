@@ -9,7 +9,8 @@ export default function ConfirmDialog({ title, message, onCancel, onConfirm }: {
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000,
+      backdropFilter: 'blur(4px)'
     }}>
       <div className="card" style={{ width: 420 }}>
         <h3 style={{ color: 'var(--gray-900)', textShadow: 'none' }}>{title || 'Подтверждение'}</h3>

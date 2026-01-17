@@ -79,7 +79,8 @@ export default function PartnerForm({ initial, onCancel, onSave }: {
       alignItems: 'center',
       justifyContent: 'center',
       padding: 20,
-      zIndex: 80
+      zIndex: 10000,
+      backdropFilter: 'blur(4px)'
     }}>
       <div className="card" style={{ width: 'min(760px,100%)', maxHeight: '90vh', overflowY: 'auto', padding: 20 }}>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>

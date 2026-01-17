@@ -32,7 +32,7 @@ export default function PartnerCredentialsModal({ partnerId, partnerName, onClos
   return (
     <div style={{
       position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(2,6,23,0.5)', zIndex: 120
+      background: 'rgba(2,6,23,0.5)', zIndex: 10000, backdropFilter: 'blur(4px)'
     }}>
       <div style={{ width: 560, background: 'var(--white)', borderRadius: 12, padding: 20 }}>
         <h3 style={{ marginBottom: 8 }}>{partnerName ? `Учётные данные для ${partnerName}` : 'Создать учётные данные'}</h3>

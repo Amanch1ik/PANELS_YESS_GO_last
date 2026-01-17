@@ -40,7 +40,7 @@ export default function TransactionDetailModal({ tx, onClose, onUpdated }: {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(4px)' }}>
       <div style={{ width: 720, maxHeight: '80vh', overflow: 'auto', background: 'var(--white)', borderRadius: 12, padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <h3 style={{ margin: 0 }}>{`Транзакция ${tx.id}`}</h3>

@@ -45,7 +45,8 @@ export default function ExportProgressModal({ isOpen, onClose, data, onComplete 
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 100
+      zIndex: 10000,
+      backdropFilter: 'blur(4px)'
     }}>
       <div className="card" style={{ width: 400, textAlign: 'center' }}>
         <h3 style={{ color: 'var(--gray-900)', textShadow: 'none', marginBottom: 20 }}>
