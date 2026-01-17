@@ -2,6 +2,7 @@ import React, { useEffect, useState, Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom'
 import { setAuthToken, hasValidTokens, hydrateCacheFromLocalStorage } from './api/client'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { ThemeProvider, useTheme } from './contexts/ThemeContext'
 import Notifications from './components/Notifications'
 
 // Lazy loading для страниц
@@ -68,12 +69,202 @@ const AppShell = () => (
   </div>
 )
 
+// Hook for responsive design
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    if (media.matches !== matches) {
+      setMatches(media.matches)
+    }
+    const listener = () => setMatches(media.matches)
+    media.addEventListener('change', listener)
+    return () => media.removeEventListener('change', listener)
+  }, [matches, query])
+
+  return matches
+}
+
+type Theme = 'light' | 'dark' | 'auto'
+
+// Компонент переключения темы для десктопа
+function ThemeToggle() {
+  const { theme, setTheme, effectiveTheme } = useTheme()
+  const [showMenu, setShowMenu] = useState(false)
+
+  const themes: { value: Theme; label: string; icon: string }[] = [
+    { value: 'light', label: 'Светлая', icon: '☀️' },
+    { value: 'dark', label: 'Темная', icon: '🌙' },
+    { value: 'auto', label: 'Авто', icon: '🔄' }
+  ]
+
+  const currentIcon = effectiveTheme === 'dark' ? '🌙' : '☀️'
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="button"
+        aria-label="Переключить тему"
+        style={{
+          background: 'var(--gray-100)',
+          color: 'var(--gray-700)',
+          border: '1px solid var(--gray-300)',
+          padding: '8px 12px',
+          fontSize: '18px',
+          minWidth: '44px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all var(--transition-base)'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--gray-200)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'var(--gray-100)'
+        }}
+      >
+        {currentIcon}
+      </button>
+
+      {showMenu && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 9998
+            }}
+            onClick={() => setShowMenu(false)}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 8px)',
+              right: 0,
+              background: 'var(--white)',
+              borderRadius: '12px',
+              boxShadow: 'var(--shadow-lg)',
+              border: '1px solid var(--gray-200)',
+              padding: '8px',
+              minWidth: '140px',
+              zIndex: 9999,
+              animation: 'scaleIn 0.2s ease-out'
+            }}
+          >
+            {themes.map((t) => (
+              <button
+                key={t.value}
+                onClick={() => {
+                  setTheme(t.value)
+                  setShowMenu(false)
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: theme === t.value ? 'var(--gray-100)' : 'transparent',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  color: 'var(--gray-800)',
+                  fontSize: '14px',
+                  fontWeight: theme === t.value ? 600 : 400,
+                  transition: 'all var(--transition-base)',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={(e) => {
+                  if (theme !== t.value) {
+                    e.currentTarget.style.background = 'var(--gray-50)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (theme !== t.value) {
+                    e.currentTarget.style.background = 'transparent'
+                  }
+                }}
+              >
+                <span style={{ fontSize: '18px' }}>{t.icon}</span>
+                <span>{t.label}</span>
+                {theme === t.value && (
+                  <span style={{ marginLeft: 'auto', fontSize: '12px' }}>✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Компонент выбора темы для мобильного меню
+function MobileThemeSelector({ onClose }: { onClose: () => void }) {
+  const { theme, setTheme } = useTheme()
+
+  const themes: { value: Theme; label: string; icon: string }[] = [
+    { value: 'light', label: 'Светлая', icon: '☀️' },
+    { value: 'dark', label: 'Темная', icon: '🌙' },
+    { value: 'auto', label: 'Авто', icon: '🔄' }
+  ]
+
+  return (
+    <div style={{ padding: '12px 16px', borderTop: '1px solid var(--gray-200)', marginTop: '8px' }}>
+      <div style={{ marginBottom: '8px', fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>
+        ТЕМА
+      </div>
+      {themes.map((t) => (
+        <button
+          key={t.value}
+          onClick={() => {
+            setTheme(t.value)
+            onClose()
+          }}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            background: theme === t.value ? 'var(--gray-100)' : 'transparent',
+            border: '1px solid var(--gray-300)',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: 'var(--gray-700)',
+            fontSize: '14px',
+            marginBottom: '6px',
+            transition: 'all var(--transition-base)',
+            fontWeight: theme === t.value ? 600 : 400
+          }}
+        >
+          <span style={{ fontSize: '18px' }}>{t.icon}</span>
+          <span>{t.label}</span>
+          {theme === t.value && (
+            <span style={{ marginLeft: 'auto', fontSize: '12px' }}>✓</span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // Компонент навигации
 function Navigation() {
   const location = useLocation()
   const currentPath = location.pathname
+  const isMobile = useMediaQuery('(max-width: 768px)')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  
   // Hide navigation bar on the login page
   if (currentPath === '/login') return null
+  
   useEffect(() => {
     // Preload критически важных компонентов
     if ('requestIdleCallback' in window) {
@@ -86,75 +277,212 @@ function Navigation() {
   }, [])
 
   const isActive = (path: string) => currentPath === path || (path === '/home' && currentPath === '/')
+  
+  const navItems = [
+    { path: '/home', label: '🏠 Главная', icon: '🏠' },
+    { path: '/partners', label: 'Партнеры', icon: '🏪' },
+    { path: '/map', label: 'Карта', icon: '🗺️' },
+    { path: '/products', label: 'Продукты', icon: '📦' },
+    { path: '/transactions', label: 'Транзакции', icon: '💳' },
+    { path: '/messages', label: 'Сообщения', icon: '💬' },
+    { path: '/users', label: 'Пользователи', icon: '👥' }
+  ]
+
+  // Breadcrumbs
+  const getBreadcrumbs = () => {
+    const pathMap: Record<string, string> = {
+      '/home': 'Главная',
+      '/partners': 'Партнеры',
+      '/map': 'Карта',
+      '/products': 'Продукты',
+      '/transactions': 'Транзакции',
+      '/messages': 'Сообщения',
+      '/users': 'Пользователи'
+    }
+    const current = pathMap[currentPath] || 'Главная'
+    return [{ label: 'Главная', path: '/home' }, { label: current, path: currentPath }]
+  }
+
+  const breadcrumbs = getBreadcrumbs()
 
   return (
-    <header style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--white)', boxShadow: 'var(--shadow-md)', borderRadius: '16px', marginBottom: '32px', border: '1px solid var(--gray-200)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '24px', color: 'var(--accent)', textShadow: 'none' }}>
-        <img
-          src="/favicon.svg"
-          alt="YESS!GO Logo"
-          style={{ width: '32px', height: '32px' }}
-        />
-        YESS!GO Админ
-      </div>
-      <nav style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <Link to="/home" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/home') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/home') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/home') ? 'none' : '1px solid var(--gray-300)'
-          }}>🏠 Главная</button>
-        </Link>
-        <Link to="/partners" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/partners') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/partners') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/partners') ? 'none' : '1px solid var(--gray-300)'
-          }}>Партнеры</button>
-        </Link>
-        <Link to="/map" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/map') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/map') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/map') ? 'none' : '1px solid var(--gray-300)'
-          }}>Карта</button>
-        </Link>
-        <Link to="/products" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/products') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/products') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/products') ? 'none' : '1px solid var(--gray-300)'
-          }}>Продукты</button>
-        </Link>
-        <Link to="/transactions" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/transactions') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/transactions') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/transactions') ? 'none' : '1px solid var(--gray-300)'
-          }}>Транзакции</button>
-        </Link>
-        <Link to="/messages" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/messages') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/messages') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/messages') ? 'none' : '1px solid var(--gray-300)'
-          }}>Сообщения</button>
-        </Link>
-        <Link to="/users" style={{ textDecoration: 'none' }}>
-          <button className="button" style={{
-            background: isActive('/users') ? 'var(--accent)' : 'var(--gray-100)',
-            color: isActive('/users') ? 'var(--white)' : 'var(--gray-700)',
-            border: isActive('/users') ? 'none' : '1px solid var(--gray-300)'
-          }}>Пользователи</button>
-        </Link>
-        {/* Navigation links */}
-        <button className="button" onClick={() => { setAuthToken(null); window.location.href = '/' }} style={{
-          background: '#dc2626',
-          color: 'var(--white)',
-          border: 'none'
-        }}>Выйти</button>
-      </nav>
-    </header>
+    <>
+      <header style={{ 
+        padding: '16px 20px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        background: 'var(--white)', 
+        boxShadow: 'var(--shadow-md)', 
+        borderRadius: '16px', 
+        marginBottom: '24px', 
+        border: '1px solid var(--gray-200)',
+        position: 'sticky',
+        top: '16px',
+        zIndex: 100,
+        transition: 'all var(--transition-base)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: isMobile ? '20px' : '24px', color: 'var(--accent)', textShadow: 'none' }}>
+          <img
+            src="/favicon.svg"
+            alt="YESS!GO Logo"
+            style={{ width: '32px', height: '32px' }}
+          />
+          {!isMobile && <span>YESS!GO Админ</span>}
+        </div>
+        
+        {/* Desktop Navigation */}
+        <nav style={{ display: isMobile ? 'none' : 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {navItems.map(item => (
+            <Link key={item.path} to={item.path} style={{ textDecoration: 'none' }}>
+              <button 
+                className="button" 
+                aria-label={item.label}
+                style={{
+                  background: isActive(item.path) ? 'var(--accent)' : 'var(--gray-100)',
+                  color: isActive(item.path) ? 'var(--white)' : 'var(--gray-700)',
+                  border: isActive(item.path) ? 'none' : '1px solid var(--gray-300)',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  transition: 'all var(--transition-base)'
+                }}
+              >
+                {item.label}
+              </button>
+            </Link>
+          ))}
+          <ThemeToggle />
+          <button 
+            className="button" 
+            onClick={() => { setAuthToken(null); window.location.href = '/' }} 
+            style={{
+              background: '#dc2626',
+              color: 'var(--white)',
+              border: 'none',
+              padding: '8px 12px',
+              fontSize: '14px'
+            }}
+            aria-label="Выйти из системы"
+          >
+            Выйти
+          </button>
+        </nav>
+
+        {/* Mobile Menu Button */}
+        {isMobile && (
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '8px',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            aria-label="Меню"
+            aria-expanded={mobileMenuOpen}
+          >
+            <span style={{ width: '24px', height: '2px', background: 'var(--gray-700)', borderRadius: '2px', transition: 'all var(--transition-base)', transform: mobileMenuOpen ? 'rotate(45deg) translateY(6px)' : 'none' }}></span>
+            <span style={{ width: '24px', height: '2px', background: 'var(--gray-700)', borderRadius: '2px', transition: 'all var(--transition-base)', opacity: mobileMenuOpen ? 0 : 1 }}></span>
+            <span style={{ width: '24px', height: '2px', background: 'var(--gray-700)', borderRadius: '2px', transition: 'all var(--transition-base)', transform: mobileMenuOpen ? 'rotate(-45deg) translateY(-6px)' : 'none' }}></span>
+          </button>
+        )}
+      </header>
+
+      {/* Mobile Navigation Menu */}
+      {isMobile && mobileMenuOpen && (
+        <nav style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          background: 'var(--white)',
+          borderRadius: '16px',
+          padding: '16px',
+          marginBottom: '24px',
+          boxShadow: 'var(--shadow-lg)',
+          border: '1px solid var(--gray-200)',
+          animation: 'slideInDown 0.3s ease-out'
+        }}>
+          {navItems.map(item => (
+            <Link key={item.path} to={item.path} style={{ textDecoration: 'none' }} onClick={() => setMobileMenuOpen(false)}>
+              <button 
+                className="button" 
+                style={{
+                  width: '100%',
+                  background: isActive(item.path) ? 'var(--accent)' : 'var(--gray-100)',
+                  color: isActive(item.path) ? 'var(--white)' : 'var(--gray-700)',
+                  border: isActive(item.path) ? 'none' : '1px solid var(--gray-300)',
+                  padding: '12px 16px',
+                  textAlign: 'left',
+                  justifyContent: 'flex-start'
+                }}
+              >
+                {item.label}
+              </button>
+            </Link>
+          ))}
+          <MobileThemeSelector onClose={() => setMobileMenuOpen(false)} />
+          <button 
+            className="button" 
+            onClick={() => { setAuthToken(null); window.location.href = '/' }} 
+            style={{
+              width: '100%',
+              background: '#dc2626',
+              color: 'var(--white)',
+              border: 'none',
+              padding: '12px 16px',
+              marginTop: '8px'
+            }}
+          >
+            Выйти
+          </button>
+        </nav>
+      )}
+
+      {/* Breadcrumbs */}
+      {currentPath !== '/home' && currentPath !== '/' && (
+        <nav style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '16px',
+          fontSize: '14px',
+          color: 'var(--gray-600)',
+          flexWrap: 'wrap'
+        }} aria-label="Breadcrumb">
+          {breadcrumbs.map((crumb, index) => (
+            <React.Fragment key={crumb.path}>
+              {index > 0 && <span style={{ color: 'var(--gray-400)' }}>→</span>}
+              <Link 
+                to={crumb.path} 
+                style={{ 
+                  color: index === breadcrumbs.length - 1 ? 'var(--gray-900)' : 'var(--gray-600)',
+                  textDecoration: 'none',
+                  fontWeight: index === breadcrumbs.length - 1 ? 600 : 400,
+                  transition: 'color var(--transition-base)'
+                }}
+                onMouseEnter={(e) => {
+                  if (index < breadcrumbs.length - 1) {
+                    e.currentTarget.style.color = 'var(--accent)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (index < breadcrumbs.length - 1) {
+                    e.currentTarget.style.color = 'var(--gray-600)'
+                  }
+                }}
+              >
+                {crumb.label}
+              </Link>
+            </React.Fragment>
+          ))}
+        </nav>
+      )}
+    </>
   )
 }
 
@@ -239,25 +567,29 @@ export default function App() {
 
   if (!authenticated) {
     return (
-      <NotificationProvider>
-        <Notifications />
+      <ThemeProvider>
+        <NotificationProvider>
+          <Notifications />
           <Login onLogin={() => setAuthenticated(true)} onError={onError} />
-      </NotificationProvider>
+        </NotificationProvider>
+      </ThemeProvider>
     )
   }
 
   return (
-    <NotificationProvider>
-      <Notifications />
-      <Router
+    <ThemeProvider>
+      <NotificationProvider>
+        <Notifications />
+        <Router
         future={{
           v7_startTransition: true,
           v7_relativeSplatPath: true,
         }}
       >
         <AppContent onLogin={() => setAuthenticated(true)} />
-      </Router>
-    </NotificationProvider>
+        </Router>
+      </NotificationProvider>
+    </ThemeProvider>
   )
 }
 
