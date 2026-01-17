@@ -41,7 +41,8 @@ export default function ProductForm({ initial, onCancel, onSave }: {
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(2,6,23,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 80
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000,
+      backdropFilter: 'blur(4px)'
     }}>
       <div className="card" style={{ width: 560 }}>
         <h3>{initial ? 'Edit Product' : 'New Product'}</h3>
